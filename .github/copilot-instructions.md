@@ -1,36 +1,57 @@
 # Copilot Instructions for This Workspace
 
-## General
-- This workspace starts **empty**. There are no predefined files or structure.
-- The project will be developed **incrementally**, step by step, based on user prompts.
-- Do NOT attempt to build the entire system at once unless explicitly requested.
+## Общие принципы
+- Репозиторий изначально пустой; структуру создаём **по шагам** по запросам пользователя.
+- Не строить всю систему целиком, пока пользователь явно не попросит.
+- Все объяснения и обсуждение — **на русском**,
+  весь код, имена файлов/папок, Docker‑конфигурация, идентификаторы — **на английском**.
 
-## Goal
-Create a solution that allows communicating with a Viessmann boiler
-via Optolink (USB) using `vcontrold`, and later extend it with .NET 10 code
-and possibly MQTT/Home Assistant integration.
+## Цель проекта
+- Организовать взаимодействие с котлом Viessmann через Optolink (USB) с помощью `vcontrold`.
+- Далее планируется добавить .NET 10‑сервисы и, возможно, интеграцию с MQTT / Home Assistant.
+- Проект развивается итеративно: каждая новая функция начинается с явного шага пользователя (например, "start step 1").
 
-The exact structure, files, and tooling should be created **as needed during the process**.
+## Поведение AI‑агента
+- При запросах вида "start step X" агент должен:
+  - определить минимально необходимую структуру директорий и файлов;
+  - предложить **самый простой рабочий** вариант реализации;
+  - сгенерировать **полное содержимое** новых файлов (а не фрагменты);
+  - если файлы нельзя создать автоматически, коротко объяснить, как сделать это вручную;
+  - обязательно описать, как собирать/запускать/тестировать созданный артефакт (команды для PowerShell на Windows).
+- Использовать документацию `vcontrold` отсюда: 
+  - https://github.com/openv/vcontrold
+  - https://github.com/openv/openv/wiki/vcontrold.xml
 
-## Copilot behavior
-- Explanations and conversation: **in Russian**.
-- Code, filenames, Docker instructions, identifiers: **in English**.
-- When asked to “start step X”, Copilot should:
-  - decide what files or structure need to be created,
-  - propose the simplest approach,
-  - generate complete file contents,
-  - if by some reason it can't generate files is should explain to the user how to do this manually
-  - explain how to build/run/test them.
+## Архитектурные ориентиры
+- Первая стадия: инфраструктура вокруг `vcontrold` (в т.ч. Docker‑образ с запущенным сервером и возможностью ручного доступа к `vclient`/`vcontrol`).
+- Следующие стадии: отдельные .NET 10 проекты (например, `src/Vcontrol.Api`, `src/Vcontrol.Worker`), которые будут обращаться к `vcontrold` по сети.
+- Предпочтительна **простая, модульная структура**: Docker‑файлы и конфиги в `docker/`, .NET‑код в `src/`, дополнительные инструменты — в отдельных подпапках.
 
-## Technical guidance
-- Copilot may choose the most appropriate implementation path
-  (e.g., building vcontrold in a Docker container, downloading sources,
-  adding .NET projects, generating config files, etc.)
-  depending on the step the user requests.
+## Docker и vcontrold
+- Для работы с `vcontrold` создавать конфигурацию внутри `docker/` (например, `Dockerfile`, `vcontrold.xml`, `vito.xml`, `entrypoint.sh`).
+- Образ должен позволять:
+  - конфигурировать путь к USB‑устройству через переменную окружения (например, `OPTOLINK_DEVICE`);
+  - запускать `vcontrold` как сервис в контейнере;
+  - подключаться к уже запущенному контейнеру интерактивно и выполнять команды `vclient`/`vcontrol` вручную.
+- Все команды для сборки/запуска контейнеров приводить для PowerShell, например:
+  - локальная сборка образа на Windows: `cd docker` затем `docker build -t vcontrol-dev .`;
+  - локальный тестовый запуск: `docker run --rm -it --device "COM3" -e OPTOLINK_DEVICE="/dev/ttyUSB0" -p 3002:3002 vcontrol-dev`.
+- Поддерживать сценарий "build на одной машине, run на другой":
+  - собирать образ локально на Windows;
+  - при необходимости переименовывать/тегировать образ под реестр (например, `docker tag vcontrol-dev my-registry.local/vcontrol-dev:latest`);
+  - пушить образ в используемый реестр (Docker Hub, private registry на OpenMediaVault и т.п.);
+  - на целевой машине (OpenMediaVault/Portainer) подтягивать образ из реестра и запускать его с нужным `--device` и `OPTOLINK_DEVICE`.
+ - Для CI/CD использовать GitHub Actions workflow `.github/workflows/docker-publish.yml`,
+   который собирает образ из `docker/Dockerfile` и публикует его в GitHub Container Registry
+   как `ghcr.io/<owner>/vcontrol-dev:latest` (и дополнительные теги по ветке/коммиту).
 
-- Prefer clean, minimal solutions.
+## Стиль и практики разработки
+- Предпочитать **минимальные рабочие** решения, без лишних зависимостей и усложнений.
+- При изменении файлов объяснять только то, что специфично для этого репозитория (особенности `vcontrold`, структура Docker, будущая интеграция .NET).
+- Не внедрять новые технологии/фреймворки без явного запроса пользователя.
+- При создании .NET‑проектов использовать современный стиль C# (.NET 10), отдельные `README.md` с примерами запуска.
 
-## Important
-- If the user gives a vague prompt, ask for clarification.
-- Never guess hidden requirements.
-- Modify only what is explicitly requested in the current step.
+## Взаимодействие с пользователем
+- При неясных требованиях задавать уточняющие вопросы, но не навязывать лишних сценариев.
+- Не придумывать скрытые требования: делать ровно то, что описано в текущем шаге.
+- Если требуется несколько шагов, предлагать простой план, но реализовывать только текущий шаг.
