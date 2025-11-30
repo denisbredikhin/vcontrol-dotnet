@@ -11,12 +11,14 @@ RUN apt-get update \
 
 WORKDIR /opt
 
-RUN git clone https://github.com/openv/vcontrold.git \
+RUN git config --global http.sslVerify false \
+    && git clone https://github.com/openv/vcontrold.git \
     && cd vcontrold \
     && ./autogen.sh \
     && ./configure \
     && make \
-    && make install
+    && make install \
+    && git config --global --unset http.sslVerify
 
 WORKDIR /app
 
