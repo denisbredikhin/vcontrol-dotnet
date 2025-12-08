@@ -14,7 +14,7 @@ WORKDIR /opt
 RUN git config --global http.sslVerify false \
     && git clone https://github.com/openv/vcontrold.git \
     && cd vcontrold \
-    && ./autogen.sh \
+    && autoreconf -fi \
     && ./configure \
     && make \
     && make install \
