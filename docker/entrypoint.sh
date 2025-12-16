@@ -1,19 +1,14 @@
 #!/bin/sh
 set -e
 
+# Configure device path in vcontrold.xml
 DEVICE_PATH="${OPTOLINK_DEVICE:-/dev/ttyUSB0}"
-
 sed -i "s#/dev/ttyUSB0#${DEVICE_PATH}#" /etc/vcontrold/vcontrold.xml
 
-vcontrold -n -x /etc/vcontrold/vcontrold.xml &
+echo "Starting vcontrold on device ${DEVICE_PATH} (port ${VCONTROLD_PORT:-3002})"
+echo "Use 'docker logs' to view output and 'docker exec -it <container> bash' to run commands."
+echo "Example: vclient -h 127.0.0.1 -p ${VCONTROLD_PORT:-3002}"
 
-VCONTROLD_PID=$!
+# Run vcontrold in foreground (-n) so container stays alive and logs stream to Docker
+exec vcontrold -n -x /etc/vcontrold/vcontrold.xml
 
-echo "vcontrold started with PID ${VCONTROLD_PID} on device ${DEVICE_PATH}"
-echo "You can connect from within the container using:"
-echo "  vclient -h 127.0.0.1 -p ${VCONTROLD_PORT:-3002}"
-
-if [ -x "/bin/bash" ]; then
-	export SHELL=/bin/bash
-fi
-exec "${SHELL:-/bin/sh}"
