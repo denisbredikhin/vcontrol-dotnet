@@ -5,7 +5,7 @@ ENV OPTOLINK_DEVICE="/dev/ttyUSB0" \
 
 RUN apt-get update \
         && apt-get install -y --no-install-recommends \
-                 build-essential git pkg-config libxml2-dev libtool autoconf automake cmake bash \
+                 build-essential git pkg-config libxml2-dev libtool autoconf automake cmake bash bsdutils \
              netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
