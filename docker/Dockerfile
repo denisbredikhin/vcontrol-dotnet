@@ -1,3 +1,13 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS worker-builder
+ARG TARGETARCH
+WORKDIR /src
+COPY src/Vcontrol.Worker/ ./Vcontrol.Worker/
+RUN dotnet restore ./Vcontrol.Worker/Vcontrol.Worker.csproj
+RUN if [ "$TARGETARCH" = "amd64" ]; then RID=linux-x64; \
+    elif [ "$TARGETARCH" = "arm64" ]; then RID=linux-arm64; \
+    else RID=linux-x64; fi; \
+    dotnet publish ./Vcontrol.Worker/Vcontrol.Worker.csproj -c Release -r $RID --self-contained true -p:PublishSingleFile=true -p:TrimUnusedDependencies=true -o /out
+
 FROM debian:stable-slim
 
 ENV OPTOLINK_DEVICE="/dev/ttyUSB0" \
@@ -20,6 +30,8 @@ RUN git config --global http.sslVerify false \
     && git config --global --unset http.sslVerify
 
 WORKDIR /app
+
+COPY --from=worker-builder /out /app/worker
 
 COPY vcontrold.xml /etc/vcontrold/vcontrold.xml
 COPY vito.xml /etc/vcontrold/vito.xml
