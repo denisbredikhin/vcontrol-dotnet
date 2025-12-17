@@ -6,7 +6,7 @@ RUN dotnet restore ./Vcontrol.Worker/Vcontrol.Worker.csproj
 RUN if [ "$TARGETARCH" = "amd64" ]; then RID=linux-x64; \
     elif [ "$TARGETARCH" = "arm64" ]; then RID=linux-arm64; \
     else RID=linux-x64; fi; \
-    dotnet publish ./Vcontrol.Worker/Vcontrol.Worker.csproj -c Release -r $RID --self-contained true -p:PublishSingleFile=true -p:TrimUnusedDependencies=true -o /out
+    dotnet publish ./Vcontrol.Worker/Vcontrol.Worker.csproj -c Release -r $RID --self-contained true -p:PublishSingleFile=true -o /out
 
 FROM debian:stable-slim
 
@@ -33,9 +33,9 @@ WORKDIR /app
 
 COPY --from=worker-builder /out /app/worker
 
-COPY vcontrold.xml /etc/vcontrold/vcontrold.xml
-COPY vito.xml /etc/vcontrold/vito.xml
-COPY entrypoint.sh /entrypoint.sh
+COPY docker/vcontrold.xml /etc/vcontrold/vcontrold.xml
+COPY docker/vito.xml /etc/vcontrold/vito.xml
+COPY docker/entrypoint.sh /entrypoint.sh
 
 RUN sed -i 's/\r$//' /entrypoint.sh \
     && chmod +x /entrypoint.sh
