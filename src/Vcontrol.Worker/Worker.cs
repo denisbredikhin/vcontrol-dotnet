@@ -24,7 +24,7 @@ public class Worker : BackgroundService
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
-                    ArgumentList = { "-h", "127.0.0.1", "-p", "--json-long", port.ToString(), "-c", "getTempA" }
+                    ArgumentList = { "--json-long", "-h", "127.0.0.1", "-p", port.ToString(), "-c", "getTempA" }
                 };
 
                 using var proc = Process.Start(psi);
