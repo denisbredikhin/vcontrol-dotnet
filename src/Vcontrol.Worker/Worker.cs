@@ -1,9 +1,10 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Vcontrol.Worker;
 
-public class Worker : BackgroundService
+public class Worker(ILogger<Worker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -11,7 +12,7 @@ public class Worker : BackgroundService
         var port = 3002;
         if (int.TryParse(portEnv, out var parsed)) port = parsed;
 
-        Console.WriteLine($"[Worker] Starting periodic vclient getTempA every 60s on port {port}...");
+        logger.LogInformation("Starting periodic vclient getTempA every 60s on port {Port}...", port);
 
         while (true)
         {
@@ -30,7 +31,7 @@ public class Worker : BackgroundService
                 using var proc = Process.Start(psi);
                 if (proc == null)
                 {
-                    Console.WriteLine("[Worker] Failed to start vclient.");
+                    logger.LogError("Failed to start vclient.");
                 }
                 else
                 {
@@ -40,16 +41,16 @@ public class Worker : BackgroundService
 
                     var output = stdout.Trim();
                     if (!string.IsNullOrEmpty(output))
-                        Console.WriteLine($"[Worker] getTempA: {output}");
+                        logger.LogInformation("getTempA: {Output}", output);
                     if (!string.IsNullOrWhiteSpace(stderr))
-                        Console.WriteLine($"[Worker][stderr]: {stderr.Trim()}");
+                        logger.LogWarning("vclient stderr: {Stderr}", stderr.Trim());
                 }
                 await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
-                Console.WriteLine($"[Worker] Exception: {ex.Message}");
-            }            
+                logger.LogError(ex, "Worker exception.");
+            }
         }
     }
 }
