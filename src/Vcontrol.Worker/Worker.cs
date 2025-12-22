@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
 
+namespace Vcontrol.Worker;
+
 public class Worker : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -11,17 +13,18 @@ public class Worker : BackgroundService
 
         Console.WriteLine($"[Worker] Starting periodic vclient getTempA every 60s on port {port}...");
 
-        while (!stoppingToken.IsCancellationRequested)
+        while (true)
         {
             try
             {
+                stoppingToken.ThrowIfCancellationRequested();
                 var psi = new ProcessStartInfo
                 {
                     FileName = "vclient",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
-                    ArgumentList = { "-h", "127.0.0.1", "-p", port.ToString(), "-c", "getTempA" }
+                    ArgumentList = { "-h", "127.0.0.1", "-p", "--json-long", port.ToString(), "-c", "getTempA" }
                 };
 
                 using var proc = Process.Start(psi);
@@ -31,8 +34,8 @@ public class Worker : BackgroundService
                 }
                 else
                 {
-                    var stdout = await proc.StandardOutput.ReadToEndAsync();
-                    var stderr = await proc.StandardError.ReadToEndAsync();
+                    var stdout = await proc.StandardOutput.ReadToEndAsync(stoppingToken);
+                    var stderr = await proc.StandardError.ReadToEndAsync(stoppingToken);
                     await proc.WaitForExitAsync(stoppingToken);
 
                     var output = stdout.Trim();
@@ -41,22 +44,12 @@ public class Worker : BackgroundService
                     if (!string.IsNullOrWhiteSpace(stderr))
                         Console.WriteLine($"[Worker][stderr]: {stderr.Trim()}");
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Worker] Exception: {ex.Message}");
-            }
-
-            try
-            {
                 await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
-            catch (TaskCanceledException)
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
-                // stopping
-            }
+                Console.WriteLine($"[Worker] Exception: {ex.Message}");
+            }            
         }
-
-        Console.WriteLine("[Worker] Stopping.");
     }
 }
