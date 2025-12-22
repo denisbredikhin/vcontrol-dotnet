@@ -13,6 +13,11 @@ FROM debian:stable-slim
 ENV OPTOLINK_DEVICE="/dev/ttyUSB0" \
     VCONTROLD_PORT=3002
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+ENV MQTT_HOST="" \
+    MQTT_PORT=1883 \
+    MQTT_USER="" \
+    MQTT_PASSWORD="" \
+    MQTT_TOPIC=""
 
 RUN apt-get update \
         && apt-get install -y --no-install-recommends \
