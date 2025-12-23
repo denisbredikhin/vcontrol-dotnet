@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 var host = Host.CreateDefaultBuilder(args)
     .ConfigureServices(services =>
     {
+        services.AddSingleton<Vcontrol.Worker.MqttService>();
         services.AddHostedService<Vcontrol.Worker.Worker>();
     })
     .Build();
