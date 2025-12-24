@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Collections.Generic;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -61,6 +62,30 @@ public sealed class VclientService(ILogger<VclientService> logger, IOptions<Vcon
         {
             logger.LogError(ex, "Exception while running vclient commands: {Commands}.", string.Join(',', cmdList));
             return (string.Empty, ex.Message, -1);
+        }
+    }
+
+    public async Task<(IReadOnlyList<VclientReading> readings, string stderr, int exitCode)> QueryAsync(IEnumerable<string> commands, CancellationToken ct)
+    {
+        var (stdout, stderr, exitCode) = await RunAsync(commands, ct);
+        if (string.IsNullOrWhiteSpace(stdout))
+        {
+            return (Array.Empty<VclientReading>(), stderr, exitCode);
+        }
+
+        try
+        {
+            var readings = JsonSerializer.Deserialize<List<VclientReading>>(stdout);
+            if (readings == null)
+            {
+                return (Array.Empty<VclientReading>(), stderr, exitCode);
+            }
+            return (readings, stderr, exitCode);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed to deserialize vclient output.");
+            return (Array.Empty<VclientReading>(), stderr, exitCode != 0 ? exitCode : -2);
         }
     }
 }
