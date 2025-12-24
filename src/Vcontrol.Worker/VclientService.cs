@@ -1,21 +1,13 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Vcontrol.Worker;
 
-public sealed class VclientService
+public sealed class VclientService(ILogger<VclientService> logger, IOptions<VcontrolOptions> options)
 {
-    private readonly ILogger<VclientService> _logger;
-    public string Host { get; }
-    public int Port { get; }
-
-    public VclientService(ILogger<VclientService> logger)
-    {
-        _logger = logger;
-        Host = Environment.GetEnvironmentVariable("VCONTROLD_HOST")?.Trim() ?? "127.0.0.1";
-        var portEnv = Environment.GetEnvironmentVariable("VCONTROLD_PORT");
-        Port = int.TryParse(portEnv, out var parsed) ? parsed : 3002;
-    }
+    public string Host => options.Value.Host;
+    public int Port => options.Value.Port;
 
     public async Task<(string stdout, string stderr, int exitCode)> RunAsync(string command, CancellationToken ct)
     {
@@ -39,7 +31,7 @@ public sealed class VclientService
             using var proc = Process.Start(psi);
             if (proc == null)
             {
-                _logger.LogError("Failed to start vclient process.");
+                logger.LogError("Failed to start vclient process.");
                 return (string.Empty, "failed to start vclient", -1);
             }
 
@@ -52,7 +44,7 @@ public sealed class VclientService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Exception while running vclient command {Command}.", command);
+            logger.LogError(ex, "Exception while running vclient command {Command}.", command);
             return (string.Empty, ex.Message, -1);
         }
     }

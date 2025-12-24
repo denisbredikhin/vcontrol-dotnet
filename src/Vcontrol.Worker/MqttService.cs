@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Protocol;
 
@@ -7,29 +8,19 @@ namespace Vcontrol.Worker;
 public class MqttService
 {
     private readonly ILogger<MqttService> _logger;
-    private readonly string? _host;
-    private readonly int _port;
-    private readonly string? _user;
-    private readonly string? _password;
-    private readonly string? _topic;
+    private readonly IOptions<MqttOptions> _optionsSnapshot;
 
-    private IMqttClient? _client;
-    private MqttClientOptions? _options;
+    private readonly IMqttClient? _client;
+    private readonly MqttClientOptions? _clientOptions;
 
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(_host) && !string.IsNullOrWhiteSpace(_topic);
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(_optionsSnapshot.Value.Host) && !string.IsNullOrWhiteSpace(_optionsSnapshot.Value.Topic);
 
-    public string? Topic => _topic;
+    public string? Topic => _optionsSnapshot.Value.Topic;
 
-    public MqttService(ILogger<MqttService> logger)
+    public MqttService(ILogger<MqttService> logger, IOptions<MqttOptions> options)
     {
         _logger = logger;
-
-        _host = Environment.GetEnvironmentVariable("MQTT_HOST");
-        var portEnv = Environment.GetEnvironmentVariable("MQTT_PORT");
-        _port = int.TryParse(portEnv, out var p) ? p : 1883;
-        _user = Environment.GetEnvironmentVariable("MQTT_USER");
-        _password = Environment.GetEnvironmentVariable("MQTT_PASSWORD");
-        _topic = Environment.GetEnvironmentVariable("MQTT_TOPIC");
+        _optionsSnapshot = options;
 
         if (!IsConfigured)
         {
@@ -39,16 +30,16 @@ public class MqttService
 
         var factory = new MqttClientFactory();
         _client = factory.CreateMqttClient();
-        _options = new MqttClientOptionsBuilder()
+        _clientOptions = new MqttClientOptionsBuilder()
             .WithClientId($"vcontrol-worker-{Guid.NewGuid():N}")
-            .WithTcpServer(_host!, _port)
-            .WithCredentials(_user ?? string.Empty, _password ?? string.Empty)
+            .WithTcpServer(_optionsSnapshot.Value.Host!, _optionsSnapshot.Value.Port)
+            .WithCredentials(_optionsSnapshot.Value.User ?? string.Empty, _optionsSnapshot.Value.Password ?? string.Empty)
             .Build();
     }
 
     private async Task<bool> EnsureConnectedAsync(CancellationToken ct)
     {
-        if (!IsConfigured || _client == null || _options == null)
+        if (!IsConfigured || _client == null || _clientOptions == null)
         {
             return false;
         }
@@ -60,14 +51,14 @@ public class MqttService
 
         try
         {
-            _logger.LogInformation("Connecting to MQTT {Host}:{Port}...", _host, _port);
-            await _client.ConnectAsync(_options, ct);
-            _logger.LogInformation("Connected to MQTT {Host}:{Port}.", _host, _port);
+            _logger.LogInformation("Connecting to MQTT {Host}:{Port}...", _optionsSnapshot.Value.Host, _optionsSnapshot.Value.Port);
+            await _client.ConnectAsync(_clientOptions, ct);
+            _logger.LogInformation("Connected to MQTT {Host}:{Port}.", _optionsSnapshot.Value.Host, _optionsSnapshot.Value.Port);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to connect to MQTT {Host}:{Port}.", _host, _port);
+            _logger.LogWarning(ex, "Failed to connect to MQTT {Host}:{Port}.", _optionsSnapshot.Value.Host, _optionsSnapshot.Value.Port);
             return false;
         }
     }
@@ -87,18 +78,18 @@ public class MqttService
         try
         {
             var msg = new MqttApplicationMessageBuilder()
-                .WithTopic(_topic!)
+                .WithTopic(_optionsSnapshot.Value.Topic!)
                 .WithPayload(payload)
                 .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
                 .Build();
 
             await _client!.PublishAsync(msg, ct);
-            _logger.LogInformation("Published payload to MQTT topic {Topic}.", _topic);
+            _logger.LogInformation("Published payload to MQTT topic {Topic}.", _optionsSnapshot.Value.Topic);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to publish to MQTT topic {Topic}.", _topic);
+            _logger.LogWarning(ex, "Failed to publish to MQTT topic {Topic}.", _optionsSnapshot.Value.Topic);
             return false;
         }
     }
