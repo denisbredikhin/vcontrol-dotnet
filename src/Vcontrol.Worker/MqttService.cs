@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Protocol;
+using System.Text;
+using System.Buffers;
 
 namespace Vcontrol.Worker;
 
@@ -12,6 +14,8 @@ public class MqttService
 
     private readonly IMqttClient? _client;
     private readonly MqttClientOptions? _clientOptions;
+    private readonly List<SubscriptionEntry> _subscriptions = new();
+    private readonly object _subsLock = new();
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_optionsSnapshot.Value.Host) && !string.IsNullOrWhiteSpace(_optionsSnapshot.Value.Topic);
 
@@ -111,5 +115,109 @@ public class MqttService
             baseTopic += "/";
         }
         return baseTopic + subtopic;
+    }
+
+    private sealed class SubscriptionEntry
+    {
+        public required string Topic { get; init; }
+        public required string Subtopic { get; init; }
+        public required Func<string, string, Task> UserHandler { get; init; }
+        public required Func<MQTTnet.MqttApplicationMessageReceivedEventArgs, Task> WrappedHandler { get; init; }
+    }
+
+    public async Task<bool> SubscribeAsync(string subtopic, Func<string, string, Task> handler, CancellationToken ct)
+    {
+        if (!IsConfigured || _client == null)
+        {
+            return false;
+        }
+        if (!await EnsureConnectedAsync(ct))
+        {
+            return false;
+        }
+
+        var topic = BuildTopic(subtopic);
+
+        Func<MQTTnet.MqttApplicationMessageReceivedEventArgs, Task> wrapped = async args =>
+        {
+            try
+            {
+                var msgTopic = args.ApplicationMessage?.Topic;
+                if (!string.Equals(msgTopic, topic, StringComparison.Ordinal))
+                {
+                    return;
+                }
+                var seq = args.ApplicationMessage?.Payload;
+                string text = seq.HasValue ? Encoding.UTF8.GetString(seq.Value.ToArray()) : string.Empty;
+                await handler(msgTopic ?? string.Empty, text);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error in MQTT received handler for topic {Topic}", args.ApplicationMessage?.Topic);
+            }
+        };
+
+        _client.ApplicationMessageReceivedAsync += wrapped;
+
+        try
+        {
+            var filter = new MqttTopicFilterBuilder()
+                .WithTopic(topic)
+                .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+                .Build();
+            await _client.SubscribeAsync(filter, ct);
+            lock (_subsLock)
+            {
+                _subscriptions.Add(new SubscriptionEntry
+                {
+                    Topic = topic,
+                    Subtopic = subtopic,
+                    UserHandler = handler,
+                    WrappedHandler = wrapped
+                });
+            }
+            _logger.LogInformation("Subscribed to MQTT topic {Topic}.", topic);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _client.ApplicationMessageReceivedAsync -= wrapped;
+            _logger.LogWarning(ex, "Failed to subscribe to MQTT topic {Topic}.", topic);
+            return false;
+        }
+    }
+
+    public async Task UnsubscribeAsync(string subtopic, Func<string, string, Task> handler, CancellationToken ct)
+    {
+        if (!IsConfigured || _client == null)
+        {
+            return;
+        }
+
+        SubscriptionEntry? entry;
+        lock (_subsLock)
+        {
+            entry = _subscriptions.FirstOrDefault(s => s.Subtopic == subtopic && s.UserHandler == handler);
+            if (entry != null)
+            {
+                _subscriptions.Remove(entry);
+            }
+        }
+        if (entry == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _client.UnsubscribeAsync(entry.Topic, ct);
+        }
+        catch
+        {
+            // ignore errors during unsubscribe
+        }
+
+        _client.ApplicationMessageReceivedAsync -= entry.WrappedHandler;
+        _logger.LogInformation("Unsubscribed from MQTT topic {Topic}.", entry.Topic);
     }
 }
