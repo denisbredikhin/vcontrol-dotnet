@@ -1,11 +1,12 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System.Buffers;
-using System.Text;
+using System.Text.Json;
+using System.Linq;
 
 namespace Vcontrol.Worker;
 
-public sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttService mqtt) : IHostedService
+
+public sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttService mqtt, VclientService vclient) : IHostedService
 {
     private Func<string, string, Task>? _handler;
 
@@ -20,7 +21,41 @@ public sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttS
         _handler = async (topic, text) =>
         {
             logger.LogInformation("Received on {Topic}: {Payload}", topic, text);
-            await Task.CompletedTask;
+            var commands = text
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+
+            if (commands.Count == 0)
+            {
+                logger.LogWarning("CommandsSubscriber: empty payload, skipping.");
+                return;
+            }
+
+            try
+            {
+                var (readings, stderr, exitCode) = await vclient.QueryAsync(commands, CancellationToken.None);
+
+                foreach (var r in readings)
+                {
+                    var json = JsonSerializer.Serialize(r);
+                    logger.LogInformation("vclient result: {Json}", json);
+                }
+
+                if (!string.IsNullOrWhiteSpace(stderr))
+                {
+                    logger.LogWarning("vclient stderr: {Stderr}", stderr);
+                }
+
+                if (exitCode != 0)
+                {
+                    logger.LogWarning("vclient exited with code {Code}.", exitCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "CommandsSubscriber: exception while executing vclient.");
+            }
         };
 
         var ok = await mqtt.SubscribeAsync("commands", _handler, cancellationToken);
