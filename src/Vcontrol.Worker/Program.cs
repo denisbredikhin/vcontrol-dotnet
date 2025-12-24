@@ -38,8 +38,20 @@ var host = Host.CreateDefaultBuilder(args)
         {
             var hostEnv = Environment.GetEnvironmentVariable("VCONTROLD_HOST");
             var portEnv = Environment.GetEnvironmentVariable("VCONTROLD_PORT");
+            var commandsEnv = Environment.GetEnvironmentVariable("COMMANDS");
             if (!string.IsNullOrWhiteSpace(hostEnv)) opts.Host = hostEnv;
             if (int.TryParse(portEnv, out var p)) opts.Port = p;
+            if (!string.IsNullOrWhiteSpace(commandsEnv))
+            {
+                var list = commandsEnv
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToList();
+                if (list.Count > 0)
+                {
+                    opts.Commands = list;
+                }
+            }
         });
 
         services.AddSingleton<Vcontrol.Worker.MqttService>();

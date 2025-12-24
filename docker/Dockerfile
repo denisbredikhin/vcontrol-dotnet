@@ -17,7 +17,8 @@ ENV MQTT_HOST="" \
     MQTT_PORT=1883 \
     MQTT_USER="" \
     MQTT_PASSWORD="" \
-    MQTT_TOPIC=""
+    MQTT_TOPIC="" \
+    COMMANDS=""
 
 RUN apt-get update \
         && apt-get install -y --no-install-recommends \

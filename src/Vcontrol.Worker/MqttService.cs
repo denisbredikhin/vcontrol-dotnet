@@ -63,7 +63,10 @@ public class MqttService
         }
     }
 
-    public async Task<bool> PublishAsync(string payload, CancellationToken ct)
+    public Task<bool> PublishAsync(string payload, CancellationToken ct)
+        => PublishToAsync(null, payload, ct);
+
+    public async Task<bool> PublishToAsync(string? subtopic, string payload, CancellationToken ct)
     {
         if (!IsConfigured)
         {
@@ -75,22 +78,38 @@ public class MqttService
             return false;
         }
 
+        var topic = BuildTopic(subtopic);
+
         try
         {
             var msg = new MqttApplicationMessageBuilder()
-                .WithTopic(_optionsSnapshot.Value.Topic!)
+                .WithTopic(topic)
                 .WithPayload(payload)
                 .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
                 .Build();
 
             await _client!.PublishAsync(msg, ct);
-            _logger.LogInformation("Published payload to MQTT topic {Topic}.", _optionsSnapshot.Value.Topic);
+            _logger.LogInformation("Published payload to MQTT topic {Topic}.", topic);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to publish to MQTT topic {Topic}.", _optionsSnapshot.Value.Topic);
+            _logger.LogWarning(ex, "Failed to publish to MQTT topic {Topic}.", topic);
             return false;
         }
+    }
+
+    private string BuildTopic(string? subtopic)
+    {
+        var baseTopic = _optionsSnapshot.Value.Topic!;
+        if (string.IsNullOrWhiteSpace(subtopic))
+        {
+            return baseTopic;
+        }
+        if (!baseTopic.EndsWith('/'))
+        {
+            baseTopic += "/";
+        }
+        return baseTopic + subtopic;
     }
 }
