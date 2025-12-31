@@ -19,7 +19,8 @@ ENV MQTT_HOST="" \
     MQTT_PASSWORD="" \
     MQTT_TOPIC="" \
     COMMANDS="" \
-    POLL_SECONDS=60
+    POLL_SECONDS=60 \
+    PUBLISH_VALUE_ONLY=""
 
 RUN apt-get update \
         && apt-get install -y --no-install-recommends \

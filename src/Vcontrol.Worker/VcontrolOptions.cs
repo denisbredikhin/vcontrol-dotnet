@@ -6,4 +6,5 @@ public class VcontrolOptions
     public int Port { get; set; } = 3002;
     public List<string> Commands { get; set; } = [];
     public int PollSeconds { get; set; } = 60;
+    public bool PublishValueOnly { get; set; } = false;
 }

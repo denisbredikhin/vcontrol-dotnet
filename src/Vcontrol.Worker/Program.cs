@@ -40,6 +40,7 @@ var host = Host.CreateDefaultBuilder(args)
             var portEnv = Environment.GetEnvironmentVariable("VCONTROLD_PORT");
             var commandsEnv = Environment.GetEnvironmentVariable("COMMANDS");
             var pollEnv = Environment.GetEnvironmentVariable("POLL_SECONDS");
+            var publishValueOnlyEnv = Environment.GetEnvironmentVariable("PUBLISH_VALUE_ONLY");
             if (!string.IsNullOrWhiteSpace(hostEnv)) opts.Host = hostEnv;
             if (int.TryParse(portEnv, out var p)) opts.Port = p;
             if (!string.IsNullOrWhiteSpace(commandsEnv))
@@ -56,6 +57,20 @@ var host = Host.CreateDefaultBuilder(args)
             if (int.TryParse(pollEnv, out var poll) && poll > 0)
             {
                 opts.PollSeconds = poll;
+            }
+            if (!string.IsNullOrWhiteSpace(publishValueOnlyEnv))
+            {
+                var val = publishValueOnlyEnv.Trim();
+                if (string.Equals(val, "1", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(val, "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    opts.PublishValueOnly = true;
+                }
+                else if (string.Equals(val, "0", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(val, "false", StringComparison.OrdinalIgnoreCase))
+                {
+                    opts.PublishValueOnly = false;
+                }
             }
         });
 

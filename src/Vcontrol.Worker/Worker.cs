@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 
@@ -29,7 +30,15 @@ public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vcl
                 foreach (var r in readings)
                 {
                     var topicPart = SanitizeTopicPart(r.Command ?? "");
-                    var payload = JsonSerializer.Serialize(r);
+                    string payload;
+                    if (vcontrolOptions.Value.PublishValueOnly)
+                    {
+                        payload = r.Value?.ToString("G", CultureInfo.InvariantCulture) ?? string.Empty;
+                    }
+                    else
+                    {
+                        payload = JsonSerializer.Serialize(r);
+                    }
                     logger.LogInformation("{Command}: {Payload}", r.Command, payload);
                     var published = await mqtt.PublishToAsync(topicPart, payload, stoppingToken);
                     if (!published)
