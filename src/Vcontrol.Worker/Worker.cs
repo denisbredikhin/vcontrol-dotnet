@@ -16,7 +16,8 @@ public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vcl
             logger.LogError("COMMANDS must be provided (comma-separated). Set env COMMANDS or configuration Vcontrol:Commands.");
             throw new InvalidOperationException("COMMANDS is required");
         }
-        logger.LogInformation("Starting periodic batch of {Count} commands every 60s on {Host}:{Port}...", commands.Count, vclient.Host, vclient.Port);
+        var pollSeconds = vcontrolOptions.Value.PollSeconds <= 0 ? 60 : vcontrolOptions.Value.PollSeconds;
+        logger.LogInformation("Starting periodic batch of {Count} commands every {Poll}s on {Host}:{Port}...", commands.Count, pollSeconds, vclient.Host, vclient.Port);
 
         while (true)
         {
@@ -46,7 +47,7 @@ public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vcl
                 {
                     logger.LogWarning("vclient exited with code {Code}.", exitCode);
                 }
-                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(pollSeconds), stoppingToken);
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {

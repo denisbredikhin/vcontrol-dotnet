@@ -39,6 +39,7 @@ var host = Host.CreateDefaultBuilder(args)
             var hostEnv = Environment.GetEnvironmentVariable("VCONTROLD_HOST");
             var portEnv = Environment.GetEnvironmentVariable("VCONTROLD_PORT");
             var commandsEnv = Environment.GetEnvironmentVariable("COMMANDS");
+            var pollEnv = Environment.GetEnvironmentVariable("POLL_SECONDS");
             if (!string.IsNullOrWhiteSpace(hostEnv)) opts.Host = hostEnv;
             if (int.TryParse(portEnv, out var p)) opts.Port = p;
             if (!string.IsNullOrWhiteSpace(commandsEnv))
@@ -51,6 +52,10 @@ var host = Host.CreateDefaultBuilder(args)
                 {
                     opts.Commands = list;
                 }
+            }
+            if (int.TryParse(pollEnv, out var poll) && poll > 0)
+            {
+                opts.PollSeconds = poll;
             }
         });
 

@@ -40,7 +40,10 @@ The container also runs a .NET worker that can periodically call `vclient` and, 
 
 - Configure MQTT via envs:
   - `MQTT_HOST`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`, `MQTT_TOPIC`
-- Set a batch of commands via required `COMMANDS` (comma-separated). Example:
+- Set a batch of commands via required `COMMANDS` (comma-separated).
+- Control polling interval with `POLL_SECONDS` (default: 60).
+
+Example:
 
 ```powershell
 docker run --rm -it `
@@ -52,6 +55,7 @@ docker run --rm -it `
   -e MQTT_PASSWORD="pass" `
   -e MQTT_TOPIC="home/viessmann" `
   -e COMMANDS="getTempA,getTempB" `
+  -e POLL_SECONDS=30 `
   -p 3002:3002 `
   vcontrol-dev
 ```

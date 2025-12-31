@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  vcontrol-dotnet:
+    image: ghcr.io/denisbredikhin/vcontrol-dotnet:latest
+    container_name: vcontrol-dotnet
+    restart: unless-stopped
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
+    environment:
+      OPTOLINK_DEVICE: "/dev/ttyUSB0"
+      VCONTROLD_PORT: "3002"
+      MQTT_HOST: "192.168.0.48"
+      MQTT_PORT: "1883"
+      MQTT_USER: "mosquitto"
+      MQTT_PASSWORD: "j3qq83y"
+      MQTT_TOPIC: "vcontrold"
+      COMMANDS: "getTempA,getTempKist,getTempKsoll,getBrennerStatus,getTempRaumNorSollM1,getBetriebArtM1,getBetriebArt"
+    ports:
+      - "3002:3002"
