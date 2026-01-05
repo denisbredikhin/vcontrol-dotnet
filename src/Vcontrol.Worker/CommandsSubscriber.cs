@@ -34,22 +34,22 @@ public sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttS
 
             try
             {
-                var (readings, stderr, exitCode) = await vclient.QueryAsync(commands, CancellationToken.None);
+                var result = await vclient.QueryAsync(commands, CancellationToken.None);
 
-                foreach (var r in readings)
+                foreach (var r in result.Readings)
                 {
                     var json = JsonSerializer.Serialize(r);
                     logger.LogInformation("vclient result: {Json}", json);
                 }
 
-                if (!string.IsNullOrWhiteSpace(stderr))
+                if (!string.IsNullOrWhiteSpace(result.Stderr))
                 {
-                    logger.LogWarning("vclient stderr: {Stderr}", stderr);
+                    logger.LogWarning("vclient stderr: {Stderr}", result.Stderr);
                 }
 
-                if (exitCode != 0)
+                if (result.ExitCode != 0)
                 {
-                    logger.LogWarning("vclient exited with code {Code}.", exitCode);
+                    logger.LogWarning("vclient exited with code {Code}.", result.ExitCode);
                 }
             }
             catch (Exception ex)

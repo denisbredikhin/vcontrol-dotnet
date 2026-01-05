@@ -25,9 +25,9 @@ public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vcl
             try
             {
                 stoppingToken.ThrowIfCancellationRequested();
-                var (readings, stderr, exitCode) = await vclient.QueryAsync(commands, stoppingToken);
+                var result = await vclient.QueryAsync(commands, stoppingToken);
 
-                foreach (var r in readings)
+                foreach (var r in result.Readings)
                 {
                     var topicPart = SanitizeTopicPart(r.Command ?? "");
                     string payload;
@@ -47,14 +47,14 @@ public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vcl
                     }
                 }
 
-                if (!string.IsNullOrWhiteSpace(stderr))
+                if (!string.IsNullOrWhiteSpace(result.Stderr))
                 {
-                    logger.LogWarning("vclient stderr: {Stderr}", stderr);
+                    logger.LogWarning("vclient stderr: {Stderr}", result.Stderr);
                 }
 
-                if (exitCode != 0)
+                if (result.ExitCode != 0)
                 {
-                    logger.LogWarning("vclient exited with code {Code}.", exitCode);
+                    logger.LogWarning("vclient exited with code {Code}.", result.ExitCode);
                 }
                 await Task.Delay(TimeSpan.FromSeconds(pollSeconds), stoppingToken);
             }

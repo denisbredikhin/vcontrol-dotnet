@@ -7,17 +7,17 @@ namespace Vcontrol.Worker;
 
 public sealed class VclientService(ILogger<VclientService> logger, IOptions<VcontrolOptions> options)
 {
-    public async Task<(string stdout, string stderr, int exitCode)> RunAsync(string command, CancellationToken ct)
+    public async Task<VclientProcessResult> RunAsync(string command, CancellationToken ct)
     {
         return await RunAsync([command], ct);
     }
 
-    public async Task<(string stdout, string stderr, int exitCode)> RunAsync(IEnumerable<string> commands, CancellationToken ct)
+    public async Task<VclientProcessResult> RunAsync(IEnumerable<string> commands, CancellationToken ct)
     {
         var cmdList = commands.Where(c => !string.IsNullOrWhiteSpace(c)).ToList();
         if (cmdList.Count == 0)
         {
-            return (string.Empty, string.Empty, 0);
+            return new VclientProcessResult { Stdout = string.Empty, Stderr = string.Empty, ExitCode = 0 };
         }
 
         var psi = new ProcessStartInfo
@@ -41,7 +41,7 @@ public sealed class VclientService(ILogger<VclientService> logger, IOptions<Vcon
             if (proc == null)
             {
                 logger.LogError("Failed to start vclient process.");
-                return (string.Empty, "failed to start vclient", -1);
+                return new VclientProcessResult { Stdout = string.Empty, Stderr = "failed to start vclient", ExitCode = -1 };
             }
 
             var stdoutTask = proc.StandardOutput.ReadToEndAsync(ct);
@@ -51,36 +51,32 @@ public sealed class VclientService(ILogger<VclientService> logger, IOptions<Vcon
             var stdout = (await stdoutTask).Trim();
             var stderr = (await stderrTask).Trim();
             var code = proc.ExitCode;
-            return (stdout, stderr, code);
+            return new VclientProcessResult { Stdout = stdout, Stderr = stderr, ExitCode = code };
         }
         catch (Exception ex) when (ex is not OperationCanceledException) 
         {
             logger.LogError(ex, "Exception while running vclient commands: {Commands}.", string.Join(',', cmdList));
-            return (string.Empty, ex.Message, -1);
+            return new VclientProcessResult { Stdout = string.Empty, Stderr = ex.Message, ExitCode = -1 };
         }
     }
 
-    public async Task<(IReadOnlyList<VclientReading> readings, string stderr, int exitCode)> QueryAsync(IEnumerable<string> commands, CancellationToken ct)
+    public async Task<VclientQueryResult> QueryAsync(IEnumerable<string> commands, CancellationToken ct)
     {
-        var (stdout, stderr, exitCode) = await RunAsync(commands, ct);
-        if (string.IsNullOrWhiteSpace(stdout))
+        var proc = await RunAsync(commands, ct);
+        if (string.IsNullOrWhiteSpace(proc.Stdout))
         {
-            return (Array.Empty<VclientReading>(), stderr, exitCode);
+            return new VclientQueryResult { Readings = Array.Empty<VclientReading>(), Stderr = proc.Stderr, ExitCode = proc.ExitCode };
         }
 
         try
         {
-            var readings = JsonSerializer.Deserialize<List<VclientReading>>(stdout);
-            if (readings == null)
-            {
-                return (Array.Empty<VclientReading>(), stderr, exitCode);
-            }
-            return (readings, stderr, exitCode);
+            var readings = JsonSerializer.Deserialize<List<VclientReading>>(proc.Stdout) ?? [];
+            return new VclientQueryResult { Readings = readings, Stderr = proc.Stderr, ExitCode = proc.ExitCode };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "Failed to deserialize vclient output.");
-            return (Array.Empty<VclientReading>(), stderr, exitCode != 0 ? exitCode : -2);
+            return new VclientQueryResult { Readings = [], Stderr = proc.Stderr, ExitCode = proc.ExitCode != 0 ? proc.ExitCode : -2 };
         }
     }
 }
