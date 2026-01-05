@@ -11,14 +11,14 @@ public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vcl
 {   
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var commands = vcontrolOptions.Value.Commands ?? new List<string>();
+        var commands = vcontrolOptions.Value.Commands ?? [];
         if (commands.Count == 0)
         {
             logger.LogError("COMMANDS must be provided (comma-separated). Set env COMMANDS or configuration Vcontrol:Commands.");
             throw new InvalidOperationException("COMMANDS is required");
         }
         var pollSeconds = vcontrolOptions.Value.PollSeconds <= 0 ? 60 : vcontrolOptions.Value.PollSeconds;
-        logger.LogInformation("Starting periodic batch of {Count} commands every {Poll}s on {Host}:{Port}...", commands.Count, pollSeconds, vclient.Host, vclient.Port);
+        logger.LogInformation("Starting periodic batch of {Count} commands every {Poll}s on {Host}:{Port}...", commands.Count, pollSeconds, vcontrolOptions.Value.Host, vcontrolOptions.Value.Port);
 
         while (true)
         {
@@ -64,8 +64,6 @@ public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vcl
             }
         }
     }
-
-    // removed JSON-splitting helpers; deserialization moved into VclientService
 
     private static string SanitizeTopicPart(string s)
     {

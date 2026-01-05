@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Linq;
-using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -9,9 +7,6 @@ namespace Vcontrol.Worker;
 
 public sealed class VclientService(ILogger<VclientService> logger, IOptions<VcontrolOptions> options)
 {
-    public string Host => options.Value.Host;
-    public int Port => options.Value.Port;
-
     public async Task<(string stdout, string stderr, int exitCode)> RunAsync(string command, CancellationToken ct)
     {
         return await RunAsync([command], ct);
@@ -34,9 +29,9 @@ public sealed class VclientService(ILogger<VclientService> logger, IOptions<Vcon
         };
         psi.ArgumentList.Add("--json-long");
         psi.ArgumentList.Add("-h");
-        psi.ArgumentList.Add(Host);
+        psi.ArgumentList.Add(options.Value.Host);
         psi.ArgumentList.Add("-p");
-        psi.ArgumentList.Add(Port.ToString());
+        psi.ArgumentList.Add(options.Value.Port.ToString());
         psi.ArgumentList.Add("-c");
         psi.ArgumentList.Add(string.Join(',', cmdList));
 
