@@ -7,6 +7,31 @@ var host = Host.CreateDefaultBuilder(args)
     .ConfigureLogging(logging =>
     {
         logging.ClearProviders();
+        var levelEnv = Environment.GetEnvironmentVariable("LOG_LEVEL");
+        var minLevel = LogLevel.Information;
+        if (!string.IsNullOrWhiteSpace(levelEnv))
+        {
+            var val = levelEnv.Trim();
+            if (!Enum.TryParse<LogLevel>(val, true, out minLevel))
+            {
+                switch (val.ToLowerInvariant())
+                {
+                    case "info":
+                        minLevel = LogLevel.Information;
+                        break;
+                    case "warn":
+                        minLevel = LogLevel.Warning;
+                        break;
+                    case "err":
+                        minLevel = LogLevel.Error;
+                        break;
+                    case "fatal":
+                        minLevel = LogLevel.Critical;
+                        break;
+                }
+            }
+        }
+        logging.SetMinimumLevel(minLevel);
         logging.AddSimpleConsole(options =>
         {
             options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff ";

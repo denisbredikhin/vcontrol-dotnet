@@ -57,6 +57,7 @@ Key environment variables (all strings unless noted):
 - `POLL_SECONDS` (int): Worker polling interval in seconds (default `60`).
 - `PUBLISH_VALUE_ONLY` (bool-like): When set (e.g., `true`), publishes only the `Value` field; otherwise publishes full JSON.
 - `MQTT_HOST`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`, `MQTT_TOPIC`: MQTT connection parameters.
+- `LOG_LEVEL`: Minimum log level for the worker (`Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical`, `None`; default `Information`). Synonyms supported: `info`, `warn`, `err`, `fatal`.
 
 Behavioral notes:
 - Each command in `COMMANDS` is published to `MQTT_TOPIC/<command>`.
