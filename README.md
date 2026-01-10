@@ -1,52 +1,65 @@
 # vcontrol-dotnet
 
-Containerized vcontrold + .NET 10 worker for Viessmann boilers via Optolink (USB). The image runs `vcontrold` as a TCP service and a .NET background worker that periodically executes `vclient` commands and publishes results to MQTT.
+Container image for integrating Viessmann boilers with MQTT using `vcontrold`. It runs `vcontrold` as a TCP service and a lightweight .NET worker that periodically reads configured boiler parameters and publishes them to your MQTT broker. In addition, it can subscribe to a dedicated command topic and execute incoming requests.
 
-## Overview
-- Viessmann boiler integration using upstream `vcontrold` (Optolink protocol).
-- .NET 10 worker: polls `vclient` on a schedule; publishes JSON (or value-only) to MQTT.
-- Interactive access supported: attach to the container and use `vclient`/`vcontrol` manually.
-- Minimal, modular layout: Docker assets in `docker/`, .NET code in `src/`.
+### Quick Run (Windows PowerShell)
+```powershell
+# Pull the public image
+docker pull ghcr.io/denisbredikhin/vcontrol-dotnet:latest
 
-See docker usage details in [docker/README.md](docker/README.md).
+# Run the container (adjust device mapping and envs)
+# Example: host device appears as COM3; container uses /dev/ttyUSB0
+docker run --rm -it `
+  --device "COM3" `
+  -e OPTOLINK_DEVICE="/dev/ttyUSB0" `
+  -e VCONTROLD_HOST="127.0.0.1" `
+  -e VCONTROLD_PORT="3002" `
+  -e COMMANDS="get_temp,get_pressure" `
+  -e MQTT_HOST="mqtt.local" `
+  -e MQTT_PORT="1883" `
+  -e MQTT_USER="user" `
+  -e MQTT_PASSWORD="pass" `
+  -e MQTT_TOPIC="vcontrol" `
+  -e POLL_SECONDS="60" `
+  -e PUBLISH_VALUE_ONLY="" `
+  -e LOG_LEVEL="Information" `
+  -p 3002:3002 `
+  ghcr.io/denisbredikhin/vcontrol-dotnet:latest
+```
+
+### Docker Compose Example
+```yaml
+services:
+  vcontrol:
+    image: ghcr.io/denisbredikhin/vcontrol-dotnet:latest
+    container_name: vcontrol-dotnet
+    restart: unless-stopped
+    environment:
+      OPTOLINK_DEVICE: "/dev/ttyUSB0"
+      VCONTROLD_HOST: "127.0.0.1"
+      VCONTROLD_PORT: "3002"
+      COMMANDS: "get_temp,get_pressure"
+      MQTT_HOST: "mqtt.local"
+      MQTT_PORT: "1883"
+      MQTT_USER: "user"
+      MQTT_PASSWORD: "pass"
+      MQTT_TOPIC: "vcontrol"
+      POLL_SECONDS: "60"
+      PUBLISH_VALUE_ONLY: ""
+      LOG_LEVEL: "Information"
+    ports:
+      - "3002:3002"
+    # Adjust device mapping to your host
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
+```
 
 ## Features
-- vcontrold built from upstream sources, served on TCP (default port 3002).
-- Periodic batch execution of `vclient` via mandatory `COMMANDS` env (CSV).
+- vcontrold served on TCP (default port 3002).
+- Mandatory `COMMANDS` env for periodic `vclient` batch execution (CSV).
 - MQTT publishing per command topic: `MQTT_TOPIC/<command>`.
 - Optional subscription to `MQTT_TOPIC/commands` to execute incoming command payloads.
 - Configurable polling interval and payload mode (full JSON vs value-only).
-
-## Quickstart (Windows PowerShell)
-Build locally and run interactively:
-
-```powershell
-cd docker
-# Build the image
-docker build -t vcontrol-dev .
-
-# Run the container (adjust device mapping as needed)
-# Example: USB device exposed as COM3 on Windows host; container sees it as /dev/ttyUSB0
-# -p 3002:3002 exposes vcontrold TCP port
-# Mandatory: COMMANDS (CSV of vclient commands)
-docker run --rm -it \
-  --device "COM3" \
-  -e OPTOLINK_DEVICE="/dev/ttyUSB0" \
-  -e VCONTROLD_HOST="127.0.0.1" \
-  -e VCONTROLD_PORT="3002" \
-  -e COMMANDS="get_temp,get_pressure" \
-  -e MQTT_HOST="mqtt.local" \
-  -e MQTT_PORT="1883" \
-  -e MQTT_USER="user" \
-  -e MQTT_PASSWORD="pass" \
-  -e MQTT_TOPIC="vcontrol" \
-  -e POLL_SECONDS="60" \
-  -e PUBLISH_VALUE_ONLY="" \
-  -p 3002:3002 \
-  vcontrol-dev
-```
-
-Compose-based run: see [docker/docker-compose.yml](docker/docker-compose.yml).
 
 ## Configuration
 Key environment variables (all strings unless noted):
@@ -64,10 +77,11 @@ Behavioral notes:
 - Subscribing service listens on `MQTT_TOPIC/commands` and executes payloads as CSV commands.
 - Logging uses `ILogger` with timestamps.
 
-## Development & CI/CD
-- Docker assets live in `docker/`.
-- The image is suitable for local builds and for publishing to registries.
-- For multi-arch builds and GHCR publishing, set up a workflow under `.github/workflows` (not shown here).
+## Contributing & Local Build
+- Tech stack: upstream `vcontrold` + .NET 10 worker (MQTTnet, DI, options pattern).
+- To build locally:
+  - Docker: `cd docker; docker build -t vcontrol-dotnet-local .`
+  - Run: `docker run --rm -it --device "COM3" -e OPTOLINK_DEVICE="/dev/ttyUSB0" -e COMMANDS="get_temp" -p 3002:3002 vcontrol-dotnet-local`
 
 ## Licensing
 - Repository code: licensed under Apache License 2.0. See [LICENSE](LICENSE).
