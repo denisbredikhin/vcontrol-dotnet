@@ -3,11 +3,6 @@ name: Build vcontrol-dotnet image (PR)
 on:
   pull_request:
     branches: [ main ]
-    paths:
-      - 'docker/**'
-      - 'src/**'
-      - '.github/workflows/docker-build-pr.yml'
-      - '.github/workflows/docker-publish.yml'
   workflow_dispatch:
 
 jobs:
