@@ -18,8 +18,6 @@ updates:
     labels:
       - "dependencies"
       - "dotnet"
-    reviewers:
-      - "denisbredikhin"
     assignees:
       - "denisbredikhin"
 
@@ -37,8 +35,6 @@ updates:
     labels:
       - "dependencies"
       - "docker"
-    reviewers:
-      - "denisbredikhin"
     assignees:
       - "denisbredikhin"
 
@@ -56,7 +52,5 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
-    reviewers:
-      - "denisbredikhin"
     assignees:
       - "denisbredikhin"
