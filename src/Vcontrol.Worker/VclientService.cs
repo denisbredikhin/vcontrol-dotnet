@@ -7,6 +7,8 @@ namespace Vcontrol.Worker;
 
 public sealed class VclientService(ILogger<VclientService> logger, IOptions<VcontrolOptions> options)
 {
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
+
     public async Task<VclientProcessResult> RunAsync(string command, CancellationToken ct)
     {
         return await RunAsync([command], ct);
@@ -14,6 +16,22 @@ public sealed class VclientService(ILogger<VclientService> logger, IOptions<Vcon
 
     public async Task<VclientProcessResult> RunAsync(IEnumerable<string> commands, CancellationToken ct)
     {
+        var acquired = false;
+        var timeoutMs = 20_000;
+        try
+        {
+            if (!_semaphore.Wait(0, ct))
+            {
+                logger.LogDebug("Another vclient invocation is running; waiting up to {TimeoutSeconds}s.", timeoutMs / 1000);
+                var got = await _semaphore.WaitAsync(timeoutMs, ct);
+                if (!got)
+                {
+                    logger.LogError("Timeout ({TimeoutSeconds}s) waiting for previous vclient invocation to finish.", timeoutMs / 1000);
+                    return new VclientProcessResult { Stdout = string.Empty, Stderr = "timeout waiting for previous vclient invocation", ExitCode = -3 };
+                }
+            }
+            acquired = true;
+
         var cmdList = commands.Where(c => !string.IsNullOrWhiteSpace(c)).ToList();
         if (cmdList.Count == 0)
         {
@@ -35,8 +53,8 @@ public sealed class VclientService(ILogger<VclientService> logger, IOptions<Vcon
         psi.ArgumentList.Add("-c");
         psi.ArgumentList.Add(string.Join(',', cmdList));
 
-        try
-        {
+            try
+            {
             using var proc = Process.Start(psi);
             if (proc == null)
             {
@@ -52,11 +70,16 @@ public sealed class VclientService(ILogger<VclientService> logger, IOptions<Vcon
             var stderr = (await stderrTask).Trim();
             var code = proc.ExitCode;
             return new VclientProcessResult { Stdout = stdout, Stderr = stderr, ExitCode = code };
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException) 
-        {
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) 
+            {
             logger.LogError(ex, "Exception while running vclient commands: {Commands}.", string.Join(',', cmdList));
             return new VclientProcessResult { Stdout = string.Empty, Stderr = ex.Message, ExitCode = -1 };
+            }
+        }
+        finally
+        {
+            if (acquired) _semaphore.Release();
         }
     }
 
