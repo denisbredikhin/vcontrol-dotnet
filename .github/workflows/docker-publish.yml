@@ -23,7 +23,21 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+          uses: actions/checkout@v6
+          with:
+            fetch-depth: 0
+
+        - name: Install GitVersion
+          uses: gittools/actions/gitversion/setup@v3
+          with:
+            versionSpec: '5.x'
+
+        - name: Determine Version
+          id: gitversion
+          uses: gittools/actions/gitversion/execute@v3
+          with:
+            useConfigFile: true
+            configFilePath: GitVersion.yml
 
       - name: Set up QEMU (for multi-arch emulation)
         uses: docker/setup-qemu-action@v3
@@ -45,6 +59,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+             type=raw,value=${{ steps.gitversion.outputs.semVer }},enable=${{ github.ref == 'refs/heads/main' }}
             type=ref,event=branch
             type=sha
 
@@ -55,6 +70,11 @@ jobs:
           file: ./docker/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            VERSION=${{ steps.gitversion.outputs.semVer }}
+            ASSEMBLY_VERSION=${{ steps.gitversion.outputs.assemblySemVer }}
+            FILE_VERSION=${{ steps.gitversion.outputs.assemblySemFileVer }}
+            INFO_VERSION=${{ steps.gitversion.outputs.informationalVersion }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

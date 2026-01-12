@@ -1,0 +1,22 @@
+mode: ContinuousDeployment
+next-version: 0.1.0
+branches:
+  main:
+    regex: ^main$
+    increment: Minor
+    prevent-increment-of-merged-branch-version: true
+    track-merge-target: true
+  feature:
+    regex: ^(.+\/)?feature[\/-].+
+    increment: Inherit
+    label: feature
+  pull-request:
+    regex: ^(pull|pull\-requests|pr)[\/-].+
+    increment: Inherit
+    label: pr
+  hotfix:
+    regex: ^hotfix[\/-].+
+    increment: Patch
+  release:
+    regex: ^release[\/-].+
+    increment: None
