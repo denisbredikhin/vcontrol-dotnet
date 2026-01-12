@@ -4,7 +4,6 @@ branches:
   main:
     regex: ^main$
     increment: Minor
-    prevent-increment-of-merged-branch-version: true
     track-merge-target: true
   feature:
     regex: ^(.+\/)?feature[\/-].+
