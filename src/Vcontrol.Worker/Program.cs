@@ -36,7 +36,7 @@ var host = Host.CreateDefaultBuilder(args)
         {
             options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff ";
             options.UseUtcTimestamp = false; // set true if you prefer UTC
-            options.SingleLine = false;
+            options.SingleLine = true;
         });
     })
     .ConfigureServices((ctx, services) =>
