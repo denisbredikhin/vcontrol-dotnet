@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
+using System.Reflection;
 
 namespace Vcontrol.Worker;
 
@@ -11,6 +12,12 @@ public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vcl
 {   
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var asm = typeof(Worker).Assembly;
+        var infoVer = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
+        var asmVer = asm.GetName().Version?.ToString() ?? "unknown";
+        var fileVer = asm.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? "unknown";
+        logger.LogInformation("Vcontrol.Worker version {InfoVersion} (Assembly {AssemblyVersion}, File {FileVersion})", infoVer, asmVer, fileVer);
+
         var commands = vcontrolOptions.Value.Commands ?? [];
         if (commands.Count == 0)
         {

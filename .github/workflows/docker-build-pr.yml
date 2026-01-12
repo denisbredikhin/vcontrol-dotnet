@@ -15,6 +15,24 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v4
+        with:
+          versionSpec: '6.x'
+
+      - name: Determine Version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v4
+        with:
+          configFilePath: GitVersion.yml
+
+      - name: Echo calculated version
+        run: |
+          echo "GitVersion SemVer: ${{ steps.gitversion.outputs.semVer }}"
+          echo "GitVersion FullSemVer: ${{ steps.gitversion.outputs.fullSemVer }}"
 
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v5
@@ -25,7 +43,13 @@ jobs:
         run: dotnet restore src/Vcontrol.Worker/Vcontrol.Worker.csproj
 
       - name: Build .NET project
-        run: dotnet build --configuration Release src/Vcontrol.Worker/Vcontrol.Worker.csproj
+        run: |
+          dotnet build --configuration Release \
+            /p:Version=${{ steps.gitversion.outputs.semVer }} \
+            /p:AssemblyVersion=${{ steps.gitversion.outputs.assemblySemVer }} \
+            /p:FileVersion=${{ steps.gitversion.outputs.assemblySemFileVer }} \
+            /p:InformationalVersion='${{ steps.gitversion.outputs.informationalVersion }}' \
+            src/Vcontrol.Worker/Vcontrol.Worker.csproj
 
       - name: Set up QEMU (for multi-arch emulation)
         uses: docker/setup-qemu-action@v3
@@ -40,5 +64,10 @@ jobs:
           file: ./docker/Dockerfile
           push: false
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            VERSION=${{ steps.gitversion.outputs.semVer }}
+            ASSEMBLY_VERSION=${{ steps.gitversion.outputs.assemblySemVer }}
+            FILE_VERSION=${{ steps.gitversion.outputs.assemblySemFileVer }}
+            INFO_VERSION=${{ steps.gitversion.outputs.informationalVersion }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
