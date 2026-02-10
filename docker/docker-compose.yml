@@ -17,4 +17,5 @@ services:
       MQTT_TOPIC: "vcontrold"
       COMMANDS: "getTempA,getTempKist,getTempKsoll,getBrennerStatus,getTempRaumNorSollM1,getBetriebArtM1,getBetriebArt"
     ports:
-      - "3002:3002"
+      - "3002:3002"  # vcontrold TCP service port
+      - "8080:8080"  # HTTP health check endpoints (/health/live, /health/ready)
