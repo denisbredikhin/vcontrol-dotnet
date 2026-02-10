@@ -8,7 +8,7 @@ using System.Reflection;
 
 namespace Vcontrol.Worker;
 
-public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vclient, IOptions<VcontrolOptions> vcontrolOptions) : BackgroundService
+public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vclient, IOptions<VcontrolOptions> vcontrolOptions, LastReplyState lastReplyState) : BackgroundService
 {   
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -62,12 +62,19 @@ public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vcl
                 if (result.ExitCode != 0)
                 {
                     logger.LogWarning("vclient exited with code {Code}.", result.ExitCode);
+                    lastReplyState.ReportFailure(result.ExitCode, string.IsNullOrWhiteSpace(result.Stderr) ? "vclient exited with non-zero exit code." : result.Stderr);
                 }
+                else
+                {
+                    lastReplyState.ReportSuccess(result.ExitCode, result.Stderr);
+                }
+
                 await Task.Delay(TimeSpan.FromSeconds(pollSeconds), stoppingToken);
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 logger.LogError(ex, "Worker exception.");
+                lastReplyState.ReportFailure(-1, ex.Message);
             }
         }
     }

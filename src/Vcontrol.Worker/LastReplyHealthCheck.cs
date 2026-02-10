@@ -1,0 +1,52 @@
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+
+namespace Vcontrol.Worker;
+
+public sealed class LastReplyHealthCheck(LastReplyState state) : IHealthCheck
+{
+    public Task<HealthCheckResult> CheckHealthAsync(
+        HealthCheckContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = state.GetSnapshot();
+
+        if (!snapshot.HasReported)
+        {
+            return Task.FromResult(HealthCheckResult.Unhealthy(
+                "No replies have been recorded yet.",
+                data: new Dictionary<string, object?>
+                {
+                    ["hasReported"] = snapshot.HasReported,
+                    ["lastSuccess"] = snapshot.LastSuccess,
+                    ["lastSuccessAt"] = snapshot.LastSuccessAt,
+                    ["lastFailureAt"] = snapshot.LastFailureAt,
+                    ["lastExitCode"] = snapshot.LastExitCode,
+                    ["lastError"] = snapshot.LastError
+                }));
+        }
+
+        var data = new Dictionary<string, object?>
+        {
+            ["hasReported"] = snapshot.HasReported,
+            ["lastSuccess"] = snapshot.LastSuccess,
+            ["lastSuccessAt"] = snapshot.LastSuccessAt,
+            ["lastFailureAt"] = snapshot.LastFailureAt,
+            ["lastExitCode"] = snapshot.LastExitCode,
+            ["lastError"] = snapshot.LastError
+        };
+
+        if (snapshot.LastSuccess)
+        {
+            return Task.FromResult(HealthCheckResult.Healthy(
+                "Last client reply was successful.",
+                data));
+        }
+
+        return Task.FromResult(HealthCheckResult.Degraded(
+            "Last client reply failed.",
+            data: data));
+    }
+}
+

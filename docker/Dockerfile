@@ -31,7 +31,7 @@ ENV MQTT_HOST="" \
 RUN apt-get update \
         && apt-get install -y --no-install-recommends \
                  build-essential git pkg-config libxml2-dev libtool autoconf automake cmake bash bsdutils \
-             netcat-openbsd \
+             netcat-openbsd curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
@@ -55,6 +55,12 @@ COPY docker/entrypoint.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh \
     && chmod +x /entrypoint.sh
 
+ENV ASPNETCORE_URLS=http://0.0.0.0:8080
+
 EXPOSE ${VCONTROLD_PORT}
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8080/health/ready || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
