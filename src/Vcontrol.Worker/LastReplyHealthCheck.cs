@@ -16,25 +16,25 @@ public sealed class LastReplyHealthCheck(LastReplyState state) : IHealthCheck
         {
             return Task.FromResult(HealthCheckResult.Unhealthy(
                 "No replies have been recorded yet.",
-                data: new Dictionary<string, object?>
+                data: new Dictionary<string, object>
                 {
                     ["hasReported"] = snapshot.HasReported,
                     ["lastSuccess"] = snapshot.LastSuccess,
-                    ["lastSuccessAt"] = snapshot.LastSuccessAt,
-                    ["lastFailureAt"] = snapshot.LastFailureAt,
-                    ["lastExitCode"] = snapshot.LastExitCode,
-                    ["lastError"] = snapshot.LastError
+                    ["lastSuccessAt"] = snapshot.LastSuccessAt?.ToString("O") ?? string.Empty,
+                    ["lastFailureAt"] = snapshot.LastFailureAt?.ToString("O") ?? string.Empty,
+                    ["lastExitCode"] = snapshot.LastExitCode ?? -1,
+                    ["lastError"] = snapshot.LastError ?? string.Empty
                 }));
         }
 
-        var data = new Dictionary<string, object?>
+        var data = new Dictionary<string, object>
         {
             ["hasReported"] = snapshot.HasReported,
             ["lastSuccess"] = snapshot.LastSuccess,
-            ["lastSuccessAt"] = snapshot.LastSuccessAt,
-            ["lastFailureAt"] = snapshot.LastFailureAt,
-            ["lastExitCode"] = snapshot.LastExitCode,
-            ["lastError"] = snapshot.LastError
+            ["lastSuccessAt"] = snapshot.LastSuccessAt?.ToString("O") ?? string.Empty,
+            ["lastFailureAt"] = snapshot.LastFailureAt?.ToString("O") ?? string.Empty,
+            ["lastExitCode"] = snapshot.LastExitCode ?? -1,
+            ["lastError"] = snapshot.LastError ?? string.Empty
         };
 
         if (snapshot.LastSuccess)
