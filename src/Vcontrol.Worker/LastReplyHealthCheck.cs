@@ -14,7 +14,7 @@ public sealed class LastReplyHealthCheck(LastReplyState state) : IHealthCheck
 
         if (!snapshot.HasReported)
         {
-            return Task.FromResult(HealthCheckResult.Unhealthy(
+            return Task.FromResult(HealthCheckResult.Healthy(
                 "No replies have been recorded yet.",
                 data: new Dictionary<string, object>
                 {
