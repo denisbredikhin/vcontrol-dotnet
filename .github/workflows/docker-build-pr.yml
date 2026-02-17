@@ -44,11 +44,13 @@ jobs:
 
       - name: Run unit tests
         run: |
-          dotnet test --configuration Release --no-restore \
-            --logger "trx;LogFilePrefix=test-results" \
+          dotnet test --configuration Release --no-restore vcontrol-dotnet.slnx -- \
             --results-directory ./TestResults \
-            --collect:"XPlat Code Coverage" \
-            vcontrol-dotnet.slnx
+            --report-trx \
+            --report-trx-filename test-results.trx \
+            --coverage \
+            --coverage-output-format cobertura \
+            --coverage-output coverage.cobertura.xml
 
       - name: Upload unit test and coverage artifacts
         if: ${{ always() }}
@@ -56,29 +58,43 @@ jobs:
         with:
           name: test-results-pr-${{ github.run_id }}
           path: |
-            TestResults/**/*.trx
-            TestResults/**/coverage.cobertura.xml
+            **/TestResults/**/*.trx
+            **/TestResults/**/coverage.cobertura.xml
           if-no-files-found: warn
 
-      - name: Generate coverage report
+      - name: Check coverage files
         if: ${{ always() }}
+        id: coverage_files
+        run: |
+          shopt -s globstar nullglob
+          files=(**/TestResults/**/coverage.cobertura.xml)
+          if [ ${#files[@]} -gt 0 ]; then
+            echo "has_coverage=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_coverage=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate coverage report
+        if: ${{ always() && steps.coverage_files.outputs.has_coverage == 'true' }}
         uses: danielpalme/ReportGenerator-GitHub-Action@5.5.0
         with:
-          reports: 'TestResults/**/coverage.cobertura.xml'
+          reports: '**/TestResults/**/coverage.cobertura.xml'
           targetdir: 'coveragereport'
           reporttypes: 'HtmlInline;MarkdownSummaryGithub'
 
       - name: Publish coverage summary
         if: ${{ always() }}
         run: |
-          if [ -f coveragereport/SummaryGithub.md ]; then
+          if [ "${{ steps.coverage_files.outputs.has_coverage }}" != "true" ]; then
+            echo "Coverage report was not generated because no coverage files were found." >> $GITHUB_STEP_SUMMARY
+          elif [ -f coveragereport/SummaryGithub.md ]; then
             cat coveragereport/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
           else
             echo "Coverage summary was not generated." >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Upload coverage HTML report
-        if: ${{ always() }}
+        if: ${{ always() && steps.coverage_files.outputs.has_coverage == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report-pr-${{ github.run_id }}
