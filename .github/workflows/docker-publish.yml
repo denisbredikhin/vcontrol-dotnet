@@ -49,7 +49,47 @@ jobs:
         run: dotnet restore vcontrol-dotnet.slnx
 
       - name: Run unit tests
-        run: dotnet test --configuration Release --no-restore vcontrol-dotnet.slnx
+        run: |
+          dotnet test --configuration Release --no-restore \
+            --logger "trx;LogFilePrefix=test-results" \
+            --results-directory ./TestResults \
+            --collect:"XPlat Code Coverage" \
+            vcontrol-dotnet.slnx
+
+      - name: Upload unit test and coverage artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-publish-${{ github.run_id }}
+          path: |
+            TestResults/**/*.trx
+            TestResults/**/coverage.cobertura.xml
+          if-no-files-found: warn
+
+      - name: Generate coverage report
+        if: ${{ always() }}
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.0
+        with:
+          reports: 'TestResults/**/coverage.cobertura.xml'
+          targetdir: 'coveragereport'
+          reporttypes: 'HtmlInline;MarkdownSummaryGithub'
+
+      - name: Publish coverage summary
+        if: ${{ always() }}
+        run: |
+          if [ -f coveragereport/SummaryGithub.md ]; then
+            cat coveragereport/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Coverage summary was not generated." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload coverage HTML report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-publish-${{ github.run_id }}
+          path: coveragereport
+          if-no-files-found: warn
 
       - name: Build .NET projects
         run: |
