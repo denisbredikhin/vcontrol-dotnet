@@ -40,16 +40,20 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Restore .NET dependencies
-        run: dotnet restore src/Vcontrol.Worker/Vcontrol.Worker.csproj
+        run: dotnet restore vcontrol-dotnet.slnx
 
-      - name: Build .NET project
+      - name: Run unit tests
+        run: dotnet test --configuration Release --no-restore vcontrol-dotnet.slnx
+
+      - name: Build .NET projects
         run: |
           dotnet build --configuration Release \
+            --no-restore \
             /p:Version=${{ steps.gitversion.outputs.semVer }} \
             /p:AssemblyVersion=${{ steps.gitversion.outputs.assemblySemVer }} \
             /p:FileVersion=${{ steps.gitversion.outputs.assemblySemFileVer }} \
             /p:InformationalVersion='${{ steps.gitversion.outputs.informationalVersion }}' \
-            src/Vcontrol.Worker/Vcontrol.Worker.csproj
+            vcontrol-dotnet.slnx
 
       - name: Set up QEMU (for multi-arch emulation)
         uses: docker/setup-qemu-action@v3

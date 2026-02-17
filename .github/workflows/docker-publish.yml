@@ -6,6 +6,8 @@ on:
     paths:
       - 'docker/**'
       - 'src/**'
+      - 'tests/**'
+      - 'vcontrol-dotnet.slnx'
       - '.github/workflows/docker-publish.yml'
   workflow_dispatch:
 
@@ -37,6 +39,27 @@ jobs:
         uses: gittools/actions/gitversion/execute@v4
         with:
           configFilePath: GitVersion.yml
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore .NET dependencies
+        run: dotnet restore vcontrol-dotnet.slnx
+
+      - name: Run unit tests
+        run: dotnet test --configuration Release --no-restore vcontrol-dotnet.slnx
+
+      - name: Build .NET projects
+        run: |
+          dotnet build --configuration Release \
+            --no-restore \
+            /p:Version=${{ steps.gitversion.outputs.semVer }} \
+            /p:AssemblyVersion=${{ steps.gitversion.outputs.assemblySemVer }} \
+            /p:FileVersion=${{ steps.gitversion.outputs.assemblySemFileVer }} \
+            /p:InformationalVersion='${{ steps.gitversion.outputs.informationalVersion }}' \
+            vcontrol-dotnet.slnx
 
       - name: Set up QEMU (for multi-arch emulation)
         uses: docker/setup-qemu-action@v3
