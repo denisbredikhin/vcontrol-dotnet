@@ -8,11 +8,19 @@ on:
       - 'src/**'
       - 'tests/**'
       - 'vcontrol-dotnet.slnx'
+      - '.github/workflows/dotnet-ci-shared.yml'
       - '.github/workflows/docker-publish.yml'
   workflow_dispatch:
 
 jobs:
+  dotnet-ci:
+    uses: ./.github/workflows/dotnet-ci-shared.yml
+    with:
+      solution_path: vcontrol-dotnet.slnx
+      artifact_prefix: publish
+
   build-and-push:
+    needs: dotnet-ci
     runs-on: ubuntu-latest
 
     permissions:
@@ -28,95 +36,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@v4
-        with:
-          versionSpec: '6.x'
-
-      - name: Determine Version
-        id: gitversion
-        uses: gittools/actions/gitversion/execute@v4
-        with:
-          configFilePath: GitVersion.yml
-
-      - name: Set up .NET SDK
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore .NET dependencies
-        run: dotnet restore vcontrol-dotnet.slnx
-
-      - name: Run unit tests
-        run: |
-          dotnet test --configuration Release --no-restore \
-            --results-directory ./TestResults \
-            --report-trx \
-            --report-trx-filename test-results.trx \
-            --coverage \
-            --coverage-output-format cobertura \
-            --coverage-output coverage.cobertura.xml \
-            vcontrol-dotnet.slnx
-
-      - name: Upload unit test and coverage artifacts
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-publish-${{ github.run_id }}
-          path: |
-            **/TestResults/**/*.trx
-            **/TestResults/**/coverage.cobertura.xml
-          if-no-files-found: warn
-
-      - name: Check coverage files
-        if: ${{ always() }}
-        id: coverage_files
-        run: |
-          shopt -s globstar nullglob
-          files=(**/TestResults/**/coverage.cobertura.xml)
-          if [ ${#files[@]} -gt 0 ]; then
-            echo "has_coverage=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_coverage=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Generate coverage report
-        if: ${{ always() && steps.coverage_files.outputs.has_coverage == 'true' }}
-        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.0
-        with:
-          reports: '**/TestResults/**/coverage.cobertura.xml'
-          targetdir: 'coveragereport'
-          reporttypes: 'HtmlInline;MarkdownSummaryGithub'
-
-      - name: Publish coverage summary
-        if: ${{ always() }}
-        run: |
-          if [ "${{ steps.coverage_files.outputs.has_coverage }}" != "true" ]; then
-            echo "Coverage report was not generated because no coverage files were found." >> $GITHUB_STEP_SUMMARY
-          elif [ -f coveragereport/SummaryGithub.md ]; then
-            cat coveragereport/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
-          else
-            echo "Coverage summary was not generated." >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Upload coverage HTML report
-        if: ${{ always() && steps.coverage_files.outputs.has_coverage == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report-publish-${{ github.run_id }}
-          path: coveragereport
-          if-no-files-found: warn
-
-      - name: Build .NET projects
-        run: |
-          dotnet build --configuration Release \
-            --no-restore \
-            /p:Version=${{ steps.gitversion.outputs.semVer }} \
-            /p:AssemblyVersion=${{ steps.gitversion.outputs.assemblySemVer }} \
-            /p:FileVersion=${{ steps.gitversion.outputs.assemblySemFileVer }} \
-            /p:InformationalVersion='${{ steps.gitversion.outputs.informationalVersion }}' \
-            vcontrol-dotnet.slnx
 
       - name: Set up QEMU (for multi-arch emulation)
         uses: docker/setup-qemu-action@v3
@@ -138,7 +57,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=${{ steps.gitversion.outputs.semVer }},enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ needs.dotnet-ci.outputs.semVer }},enable=${{ github.ref == 'refs/heads/main' }}
             type=ref,event=branch
             type=sha
 
@@ -150,10 +69,10 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: |
-            VERSION=${{ steps.gitversion.outputs.semVer }}
-            ASSEMBLY_VERSION=${{ steps.gitversion.outputs.assemblySemVer }}
-            FILE_VERSION=${{ steps.gitversion.outputs.assemblySemFileVer }}
-            INFO_VERSION=${{ steps.gitversion.outputs.informationalVersion }}
+            VERSION=${{ needs.dotnet-ci.outputs.semVer }}
+            ASSEMBLY_VERSION=${{ needs.dotnet-ci.outputs.assemblySemVer }}
+            FILE_VERSION=${{ needs.dotnet-ci.outputs.assemblySemFileVer }}
+            INFO_VERSION=${{ needs.dotnet-ci.outputs.informationalVersion }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

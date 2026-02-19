@@ -1,0 +1,138 @@
+name: Dotnet CI Shared
+
+on:
+  workflow_call:
+    inputs:
+      solution_path:
+        description: Solution or solution filter path
+        required: false
+        type: string
+        default: vcontrol-dotnet.slnx
+      artifact_prefix:
+        description: Prefix for test/coverage artifacts
+        required: false
+        type: string
+        default: ci
+    outputs:
+      semVer:
+        description: GitVersion semantic version
+        value: ${{ jobs.dotnet-ci.outputs.semVer }}
+      assemblySemVer:
+        description: GitVersion assembly semantic version
+        value: ${{ jobs.dotnet-ci.outputs.assemblySemVer }}
+      assemblySemFileVer:
+        description: GitVersion assembly file version
+        value: ${{ jobs.dotnet-ci.outputs.assemblySemFileVer }}
+      informationalVersion:
+        description: GitVersion informational version
+        value: ${{ jobs.dotnet-ci.outputs.informationalVersion }}
+
+jobs:
+  dotnet-ci:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      semVer: ${{ steps.gitversion.outputs.semVer }}
+      assemblySemVer: ${{ steps.gitversion.outputs.assemblySemVer }}
+      assemblySemFileVer: ${{ steps.gitversion.outputs.assemblySemFileVer }}
+      informationalVersion: ${{ steps.gitversion.outputs.informationalVersion }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v4
+        with:
+          versionSpec: '6.x'
+
+      - name: Determine Version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v4
+        with:
+          configFilePath: GitVersion.yml
+
+      - name: Echo calculated version
+        run: |
+          echo "GitVersion SemVer: ${{ steps.gitversion.outputs.semVer }}"
+          echo "GitVersion FullSemVer: ${{ steps.gitversion.outputs.fullSemVer }}"
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore .NET dependencies
+        run: dotnet restore ${{ inputs.solution_path }}
+
+      - name: Run unit tests
+        run: |
+          dotnet test --configuration Release --no-restore \
+            --solution ${{ inputs.solution_path }} \
+            --results-directory ./TestResults \
+            --report-trx \
+            --report-trx-filename test-results.trx \
+            --coverage \
+            --coverage-output-format cobertura \
+            --coverage-output coverage.cobertura.xml
+
+      - name: Upload unit test and coverage artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ inputs.artifact_prefix }}-${{ github.run_id }}
+          path: |
+            **/TestResults/**/*.trx
+            **/TestResults/**/coverage.cobertura.xml
+          if-no-files-found: warn
+
+      - name: Check coverage files
+        if: ${{ always() }}
+        id: coverage_files
+        run: |
+          shopt -s globstar nullglob
+          files=(**/TestResults/**/coverage.cobertura.xml)
+          if [ ${#files[@]} -gt 0 ]; then
+            echo "has_coverage=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_coverage=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate coverage report
+        if: ${{ always() && steps.coverage_files.outputs.has_coverage == 'true' }}
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.0
+        with:
+          reports: '**/TestResults/**/coverage.cobertura.xml'
+          targetdir: 'coveragereport'
+          reporttypes: 'HtmlInline;MarkdownSummaryGithub'
+
+      - name: Publish coverage summary
+        if: ${{ always() }}
+        run: |
+          if [ "${{ steps.coverage_files.outputs.has_coverage }}" != "true" ]; then
+            echo "Coverage report was not generated because no coverage files were found." >> $GITHUB_STEP_SUMMARY
+          elif [ -f coveragereport/SummaryGithub.md ]; then
+            cat coveragereport/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Coverage summary was not generated." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload coverage HTML report
+        if: ${{ always() && steps.coverage_files.outputs.has_coverage == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ inputs.artifact_prefix }}-${{ github.run_id }}
+          path: coveragereport
+          if-no-files-found: warn
+
+      - name: Build .NET projects
+        run: |
+          dotnet build --configuration Release \
+            --no-restore \
+            /p:Version=${{ steps.gitversion.outputs.semVer }} \
+            /p:AssemblyVersion=${{ steps.gitversion.outputs.assemblySemVer }} \
+            /p:FileVersion=${{ steps.gitversion.outputs.assemblySemFileVer }} \
+            /p:InformationalVersion='${{ steps.gitversion.outputs.informationalVersion }}' \
+            ${{ inputs.solution_path }}
