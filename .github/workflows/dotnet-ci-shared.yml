@@ -32,6 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      checks: write
     outputs:
       semVer: ${{ steps.gitversion.outputs.semVer }}
       assemblySemVer: ${{ steps.gitversion.outputs.assemblySemVer }}
@@ -87,6 +88,35 @@ jobs:
             **/TestResults/**/*.trx
             **/TestResults/**/coverage.cobertura.xml
           if-no-files-found: warn
+
+      - name: Check TRX files
+        if: ${{ always() }}
+        id: trx_files
+        run: |
+          shopt -s globstar nullglob
+          files=(**/TestResults/**/*.trx)
+          if [ ${#files[@]} -gt 0 ]; then
+            echo "has_trx=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_trx=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish unit test report
+        if: ${{ always() && steps.trx_files.outputs.has_trx == 'true' }}
+        continue-on-error: true
+        uses: dorny/test-reporter@v2
+        with:
+          name: Unit Tests (${{ inputs.artifact_prefix }})
+          path: '**/TestResults/**/*.trx'
+          reporter: dotnet-trx
+          fail-on-error: 'false'
+          fail-on-empty: 'false'
+          list-suites: failed
+          list-tests: failed
+
+      - name: Publish missing test-results note
+        if: ${{ always() && steps.trx_files.outputs.has_trx != 'true' }}
+        run: echo "Unit test report was not generated because no TRX files were found." >> $GITHUB_STEP_SUMMARY
 
       - name: Check coverage files
         if: ${{ always() }}
