@@ -50,13 +50,14 @@ jobs:
 
       - name: Run unit tests
         run: |
-          dotnet test --configuration Release --no-restore vcontrol-dotnet.slnx -- \
+          dotnet test --configuration Release --no-restore \
             --results-directory ./TestResults \
             --report-trx \
             --report-trx-filename test-results.trx \
             --coverage \
             --coverage-output-format cobertura \
-            --coverage-output coverage.cobertura.xml
+            --coverage-output coverage.cobertura.xml \
+            vcontrol-dotnet.slnx
 
       - name: Upload unit test and coverage artifacts
         if: ${{ always() }}
