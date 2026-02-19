@@ -3,7 +3,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Vcontrol.Worker.Tests;
 
-public sealed class LastReplyHealthCheckTests()
+public sealed class LastReplyHealthCheckTests
 {
     [Fact]
     public async Task CheckHealthAsync_returns_healthy_when_no_replies_were_reported()
