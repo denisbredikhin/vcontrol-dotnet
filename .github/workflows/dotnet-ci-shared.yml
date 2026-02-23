@@ -81,7 +81,7 @@ jobs:
 
       - name: Upload unit test and coverage artifacts
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-results-${{ inputs.artifact_prefix }}-${{ github.run_id }}
           path: |
@@ -151,7 +151,7 @@ jobs:
 
       - name: Upload coverage HTML report
         if: ${{ always() && steps.coverage_files.outputs.has_coverage == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report-${{ inputs.artifact_prefix }}-${{ github.run_id }}
           path: coveragereport
