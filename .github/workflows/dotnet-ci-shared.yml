@@ -66,12 +66,16 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Restore .NET dependencies
-        run: dotnet restore ${{ inputs.solution_path }}
+        env:
+          SOLUTION_PATH: ${{ inputs.solution_path }}
+        run: dotnet restore "$SOLUTION_PATH"
 
       - name: Run unit tests
+        env:
+          SOLUTION_PATH: ${{ inputs.solution_path }}
         run: |
           dotnet test --configuration Release --no-restore \
-            --solution ${{ inputs.solution_path }} \
+            --solution "$SOLUTION_PATH" \
             --results-directory ./TestResults \
             --report-trx \
             --report-trx-filename test-results.trx \
@@ -158,6 +162,8 @@ jobs:
           if-no-files-found: warn
 
       - name: Build .NET projects
+        env:
+          SOLUTION_PATH: ${{ inputs.solution_path }}
         run: |
           dotnet build --configuration Release \
             --no-restore \
@@ -165,4 +171,4 @@ jobs:
             /p:AssemblyVersion=${{ steps.gitversion.outputs.assemblySemVer }} \
             /p:FileVersion=${{ steps.gitversion.outputs.assemblySemFileVer }} \
             /p:InformationalVersion='${{ steps.gitversion.outputs.informationalVersion }}' \
-            ${{ inputs.solution_path }}
+            "$SOLUTION_PATH"
