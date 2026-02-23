@@ -5,6 +5,7 @@ ARG ASSEMBLY_VERSION
 ARG FILE_VERSION
 ARG INFO_VERSION
 WORKDIR /src
+COPY .editorconfig ./.editorconfig
 COPY src/Vcontrol.Worker/ ./Vcontrol.Worker/
 RUN dotnet restore ./Vcontrol.Worker/Vcontrol.Worker.csproj
 RUN if [ "$TARGETARCH" = "amd64" ]; then RID=linux-x64; \

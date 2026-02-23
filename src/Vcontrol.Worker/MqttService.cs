@@ -7,7 +7,7 @@ using System.Buffers;
 
 namespace Vcontrol.Worker;
 
-public class MqttService
+internal class MqttService
 {
     private readonly ILogger<MqttService> _logger;
     private readonly IOptions<MqttOptions> _optionsSnapshot;

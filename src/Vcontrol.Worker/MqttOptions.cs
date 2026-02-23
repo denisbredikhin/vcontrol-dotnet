@@ -1,6 +1,6 @@
 namespace Vcontrol.Worker;
 
-public class MqttOptions
+internal class MqttOptions
 {
     public string? Host { get; set; }
     public int Port { get; set; } = 1883;

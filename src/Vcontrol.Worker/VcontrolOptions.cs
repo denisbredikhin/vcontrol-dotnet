@@ -1,10 +1,10 @@
 namespace Vcontrol.Worker;
 
-public class VcontrolOptions
+internal class VcontrolOptions
 {
     public string Host { get; set; } = "127.0.0.1";
     public int Port { get; set; } = 3002;
     public List<string> Commands { get; set; } = [];
     public int PollSeconds { get; set; } = 60;
-    public bool PublishValueOnly { get; set; } = false;
+    public bool PublishValueOnly { get; set; }
 }
