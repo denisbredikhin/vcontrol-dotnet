@@ -8,7 +8,7 @@ using System.Reflection;
 
 namespace Vcontrol.Worker;
 
-public class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vclient, IOptions<VcontrolOptions> vcontrolOptions, LastReplyState lastReplyState) : BackgroundService
+internal class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService vclient, IOptions<VcontrolOptions> vcontrolOptions, LastReplyState lastReplyState) : BackgroundService
 {   
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

@@ -387,3 +387,21 @@ dotnet_naming_style.s_camelcase.required_suffix =
 dotnet_naming_style.s_camelcase.word_separator = 
 dotnet_naming_style.s_camelcase.capitalization = camel_case
 
+[src/Vcontrol.Worker/*.cs]
+# CA1002 does not apply to options binding types where mutable List<T> is the practical binder target.
+dotnet_diagnostic.CA1002.severity = none
+# CA2227 does not apply to options binding types because setters are required for configuration binding.
+dotnet_diagnostic.CA2227.severity = none
+# CA1024 does not apply to GetSnapshot because it intentionally conveys a snapshot operation with allocation semantics.
+dotnet_diagnostic.CA1024.severity = none
+# CA1031 is intentionally relaxed for long-running worker loops and message handlers that must log and continue.
+dotnet_diagnostic.CA1031.severity = none
+# CA1724 conflicts with the standard BackgroundService class name "Worker" used in this executable project.
+dotnet_diagnostic.CA1724.severity = none
+# CA1848 is disabled to keep logging code straightforward; LoggerMessage boilerplate is not justified here.
+dotnet_diagnostic.CA1848.severity = none
+# CA1873 is disabled alongside CA1848 because this service's logging paths prioritize clarity over micro-optimizations.
+dotnet_diagnostic.CA1873.severity = none
+# CA2007 is not applicable for ASP.NET Core/Generic Host code paths where SynchronizationContext capture is not required.
+dotnet_diagnostic.CA2007.severity = none
+

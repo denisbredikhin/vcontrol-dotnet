@@ -14,18 +14,18 @@ if (!string.IsNullOrWhiteSpace(levelEnv))
     var val = levelEnv.Trim();
     if (!Enum.TryParse<LogLevel>(val, true, out minLevel))
     {
-        switch (val.ToLowerInvariant())
+        switch (val.ToUpperInvariant())
         {
-            case "info":
+            case "INFO":
                 minLevel = LogLevel.Information;
                 break;
-            case "warn":
+            case "WARN":
                 minLevel = LogLevel.Warning;
                 break;
-            case "err":
+            case "ERR":
                 minLevel = LogLevel.Error;
                 break;
-            case "fatal":
+            case "FATAL":
                 minLevel = LogLevel.Critical;
                 break;
         }

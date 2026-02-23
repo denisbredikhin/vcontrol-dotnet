@@ -2,7 +2,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Vcontrol.Worker;
 
-public sealed class LastReplyHealthCheck(LastReplyState state) : IHealthCheck
+internal sealed class LastReplyHealthCheck(LastReplyState state) : IHealthCheck
 {
     public Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,

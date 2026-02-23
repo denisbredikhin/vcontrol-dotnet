@@ -2,7 +2,7 @@ using System;
 
 namespace Vcontrol.Worker;
 
-public sealed class LastReplyState
+internal sealed class LastReplyState
 {
     private readonly object _lock = new();
 
@@ -55,7 +55,7 @@ public sealed class LastReplyState
     }
 }
 
-public sealed record LastReplySnapshot(
+internal sealed record LastReplySnapshot(
     bool HasReported,
     bool LastSuccess,
     DateTimeOffset? LastSuccessAt,

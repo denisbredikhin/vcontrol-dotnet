@@ -6,7 +6,7 @@ using System.Linq;
 namespace Vcontrol.Worker;
 
 
-public sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttService mqtt, VclientService vclient) : IHostedService
+internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttService mqtt, VclientService vclient) : IHostedService
 {
     private Func<string, string, Task>? _handler;
 

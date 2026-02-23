@@ -1,11 +1,12 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Vcontrol.Worker;
 
-public sealed class VclientService(ILogger<VclientService> logger, IOptions<VcontrolOptions> options)
+internal sealed class VclientService(ILogger<VclientService> logger, IOptions<VcontrolOptions> options) : IDisposable
 {
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
@@ -49,7 +50,7 @@ public sealed class VclientService(ILogger<VclientService> logger, IOptions<Vcon
         psi.ArgumentList.Add("-h");
         psi.ArgumentList.Add(options.Value.Host);
         psi.ArgumentList.Add("-p");
-        psi.ArgumentList.Add(options.Value.Port.ToString());
+        psi.ArgumentList.Add(options.Value.Port.ToString(CultureInfo.InvariantCulture));
         psi.ArgumentList.Add("-c");
         psi.ArgumentList.Add(string.Join(',', cmdList));
 
@@ -101,5 +102,10 @@ public sealed class VclientService(ILogger<VclientService> logger, IOptions<Vcon
             logger.LogError(ex, "Failed to deserialize vclient output.");
             return new VclientQueryResult { Readings = [], Stderr = proc.Stderr, ExitCode = proc.ExitCode != 0 ? proc.ExitCode : -2 };
         }
+    }
+
+    public void Dispose()
+    {
+        _semaphore.Dispose();
     }
 }

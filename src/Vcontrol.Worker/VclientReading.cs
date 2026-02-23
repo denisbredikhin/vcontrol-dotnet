@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Vcontrol.Worker;
 
-public sealed class VclientReading
+internal sealed class VclientReading
 {
     [JsonPropertyName("command")]
     public string? Command { get; set; }
