@@ -132,7 +132,7 @@ jobs:
 
       - name: Generate coverage report
         if: ${{ always() && steps.coverage_files.outputs.has_coverage == 'true' }}
-        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.0
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.1
         with:
           reports: '**/TestResults/**/coverage.cobertura.xml'
           targetdir: 'coveragereport'
