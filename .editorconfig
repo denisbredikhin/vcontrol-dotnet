@@ -387,7 +387,6 @@ dotnet_naming_style.s_camelcase.required_suffix =
 dotnet_naming_style.s_camelcase.word_separator = 
 dotnet_naming_style.s_camelcase.capitalization = camel_case
 
-[src/Vcontrol.Worker/*.cs]
 # CA1031 is intentionally relaxed for long-running worker loops and message handlers that must log and continue.
 dotnet_diagnostic.CA1031.severity = none
 # CA1848 is disabled to keep logging code straightforward; LoggerMessage boilerplate is not justified here.
