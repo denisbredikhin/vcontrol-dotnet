@@ -35,14 +35,11 @@ internal sealed class LastReplyHealthCheck(LastReplyState state) : IHealthCheck
             ["lastError"] = snapshot.LastError ?? string.Empty
         };
 
-        if (snapshot.LastSuccess)
-        {
-            return Task.FromResult(HealthCheckResult.Healthy(
+        return snapshot.LastSuccess
+            ? Task.FromResult(HealthCheckResult.Healthy(
                 "Last client reply was successful.",
-                data));
-        }
-
-        return Task.FromResult(HealthCheckResult.Degraded(
+                data))
+            : Task.FromResult(HealthCheckResult.Degraded(
             "Last client reply failed.",
             data: data));
     }

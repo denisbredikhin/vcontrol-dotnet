@@ -14,8 +14,8 @@ internal class MqttService
 
     private readonly IMqttClient? _client;
     private readonly MqttClientOptions? _clientOptions;
-    private readonly List<SubscriptionEntry> _subscriptions = new();
-    private readonly object _subsLock = new();
+    private readonly List<SubscriptionEntry> _subscriptions = [];
+    private readonly Lock _subsLock = new();
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_optionsSnapshot.Value.Host) && !string.IsNullOrWhiteSpace(_optionsSnapshot.Value.Topic);
 
@@ -138,7 +138,7 @@ internal class MqttService
 
         var topic = BuildTopic(subtopic);
 
-        Func<MQTTnet.MqttApplicationMessageReceivedEventArgs, Task> wrapped = async args =>
+        async Task Wrapped(MqttApplicationMessageReceivedEventArgs args)
         {
             try
             {
@@ -155,9 +155,9 @@ internal class MqttService
             {
                 _logger.LogWarning(ex, "Error in MQTT received handler for topic {Topic}", args.ApplicationMessage?.Topic);
             }
-        };
+        }
 
-        _client.ApplicationMessageReceivedAsync += wrapped;
+        _client.ApplicationMessageReceivedAsync += Wrapped;
 
         try
         {
@@ -173,7 +173,7 @@ internal class MqttService
                     Topic = topic,
                     Subtopic = subtopic,
                     UserHandler = handler,
-                    WrappedHandler = wrapped
+                    WrappedHandler = Wrapped
                 });
             }
             _logger.LogInformation("Subscribed to MQTT topic {Topic}.", topic);
@@ -181,7 +181,7 @@ internal class MqttService
         }
         catch (Exception ex)
         {
-            _client.ApplicationMessageReceivedAsync -= wrapped;
+            _client.ApplicationMessageReceivedAsync -= Wrapped;
             _logger.LogWarning(ex, "Failed to subscribe to MQTT topic {Topic}.", topic);
             return false;
         }

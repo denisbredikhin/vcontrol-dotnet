@@ -37,15 +37,9 @@ internal class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService v
                 foreach (var r in result.Readings)
                 {
                     var topicPart = SanitizeTopicPart(r.Command ?? "");
-                    string payload;
-                    if (vcontrolOptions.Value.PublishValueOnly)
-                    {
-                        payload = r.Value?.ToString("G", CultureInfo.InvariantCulture) ?? string.Empty;
-                    }
-                    else
-                    {
-                        payload = JsonSerializer.Serialize(r);
-                    }
+                    string payload = vcontrolOptions.Value.PublishValueOnly
+                        ? r.Value?.ToString("G", CultureInfo.InvariantCulture) ?? string.Empty
+                        : JsonSerializer.Serialize(r);
                     logger.LogInformation("{Command}: {Payload}", r.Command, payload);
                     var published = await mqtt.PublishToAsync(topicPart, payload, stoppingToken);
                     if (!published)

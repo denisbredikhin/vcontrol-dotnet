@@ -4,7 +4,7 @@ namespace Vcontrol.Worker;
 
 internal sealed class LastReplyState
 {
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
 
     public bool HasReported { get; private set; }
     public bool LastSuccess { get; private set; }

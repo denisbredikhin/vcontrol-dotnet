@@ -4,6 +4,14 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Folder Name="/SolutionItems/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="GitVersion.yml" />
+    <File Path="LICENSE" />
+    <File Path="NOTICE.md" />
+    <File Path="README.md" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Vcontrol.Worker/Vcontrol.Worker.csproj" />
   </Folder>
