@@ -43,7 +43,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-dashboard:18889"
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
       OTEL_SERVICE_NAME: "vcontrol-dotnet"
-      # Prometheus scraping endpoint is disabled (VCONTROL_ENABLE_METRICS not set)
+      # Prometheus scraping endpoint is disabled (ENABLE_PROMETHEUS_EXPORTER not set)
     ports:
       - "3002:3002"  # vcontrold TCP service port
       - "8080:8080"  # HTTP health check endpoints (/health/live, /health/ready)

@@ -45,9 +45,9 @@ This is a single .NET 10 `Microsoft.NET.Sdk.Web` worker service (`src/Vcontrol.W
 **HTTP endpoints (port 8080):**
 - `GET /health/live` — always `200 OK` (process alive)
 - `GET /health/ready` — `200` if last vclient call succeeded, `503` otherwise; JSON body from `LastReplyState`
-- `GET /metrics` — Prometheus scrape endpoint; only active when `VCONTROL_ENABLE_METRICS=true`
+- `GET /metrics` — Prometheus scrape endpoint; only active when `ENABLE_PROMETHEUS_EXPORTER=true`
 
-**Metrics (`VcontrolMetrics`):** A single singleton registered via factory delegate (`services.AddSingleton(_ => new VcontrolMetrics(enableMetrics))`). When `enabled=false` all instruments are `null` and record methods are no-ops — no OTel pipeline is initialized. The pipeline is activated when either `VCONTROL_ENABLE_METRICS=true` (adds Prometheus exporter + `/metrics` middleware) or `OTEL_EXPORTER_OTLP_ENDPOINT` is non-empty (adds OTLP exporter; full `OTEL_EXPORTER_OTLP_*` env vars handled automatically by the OTel SDK). Both exporters can be active simultaneously. `Program.cs` uses three bools: `enablePrometheus`, `enableOtlp`, `enableMetrics = enablePrometheus || enableOtlp`.
+**Metrics (`VcontrolMetrics`):** A single singleton registered via factory delegate (`services.AddSingleton(_ => new VcontrolMetrics(enableMetrics))`). When `enabled=false` all instruments are `null` and record methods are no-ops — no OTel pipeline is initialized. The pipeline is activated when either `ENABLE_PROMETHEUS_EXPORTER=true` (adds Prometheus exporter + `/metrics` middleware) or `OTEL_EXPORTER_OTLP_ENDPOINT` is non-empty (adds OTLP exporter; full `OTEL_EXPORTER_OTLP_*` env vars handled automatically by the OTel SDK). Both exporters can be active simultaneously. `Program.cs` uses three bools: `enablePrometheus`, `enableOtlp`, `enableMetrics = enablePrometheus || enableOtlp`.
 
 **vclient `source` label:** `VclientService.QueryAsync` takes a `source` string passed by the caller — `"timer"` from `Worker` and `"command"` from `CommandsSubscriber`. All vclient metrics are recorded inside `QueryAsync`.
 

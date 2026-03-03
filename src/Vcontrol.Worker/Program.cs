@@ -43,7 +43,7 @@ builder.Logging.AddSimpleConsole(options =>
 
 // Metrics feature flags (disabled by default)
 var enablePrometheus = string.Equals(
-    Environment.GetEnvironmentVariable("VCONTROL_ENABLE_METRICS")?.Trim(),
+    Environment.GetEnvironmentVariable("ENABLE_PROMETHEUS_EXPORTER")?.Trim(),
     "true",
     StringComparison.OrdinalIgnoreCase);
 var enableOtlp = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT"));
@@ -144,7 +144,7 @@ var app = builder.Build();
 // Liveness endpoint - process up
 app.MapGet("/health/live", () => Results.Ok(new { status = "Live" }));
 
-if (enableMetrics)
+if (enablePrometheus)
 {
     app.UseOpenTelemetryPrometheusScrapingEndpoint();
 }

@@ -87,7 +87,7 @@ Metrics are **disabled by default**. Two independent env vars activate the pipel
 
 | Variable | Effect when set |
 |---|---|
-| `VCONTROL_ENABLE_METRICS=true` | Enables Prometheus scrape endpoint at `GET /metrics` (port 8080) |
+| `ENABLE_PROMETHEUS_EXPORTER=true` | Enables Prometheus scrape endpoint at `GET /metrics` (port 8080) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT=<url>` | Enables OTLP push export to the given endpoint |
 
 Either variable (or both) activates the shared OpenTelemetry pipeline (meter, runtime instrumentation, ASP.NET Core instrumentation). They can be combined.
@@ -127,7 +127,7 @@ When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the full set of standard OTel SDK env
 
 ### Integration
 
-- **Prometheus:** set `VCONTROL_ENABLE_METRICS=true` and scrape `http://<host>:8080/metrics`. Expose port 8080 in your Compose or `docker run` command.
+- **Prometheus:** set `ENABLE_PROMETHEUS_EXPORTER=true` and scrape `http://<host>:8080/metrics`. Expose port 8080 in your Compose or `docker run` command.
 - **OpenTelemetry Collector / OTLP:** set `OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318` and the worker will push metrics automatically. No port exposure needed.
 - Both exporters can be active simultaneously.
 
