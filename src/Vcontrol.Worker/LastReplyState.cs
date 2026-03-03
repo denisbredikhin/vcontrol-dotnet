@@ -1,5 +1,3 @@
-using System;
-
 namespace Vcontrol.Worker;
 
 internal sealed class LastReplyState

@@ -77,6 +77,54 @@ Behavioral notes:
 - Subscribing service listens on `MQTT_TOPIC/commands` and executes payloads as CSV commands.
 - Logging uses `ILogger` with timestamps.
 
+## Metrics & Observability
+
+Metrics are implemented using `System.Diagnostics.Metrics` (meter name `vcontrol.mqtt`) and are compatible with Prometheus / OpenTelemetry naming conventions.
+
+### Enabling metrics
+
+Metrics are **disabled by default**. To enable them, set:
+
+```
+VCONTROL_ENABLE_METRICS=true
+```
+
+When enabled:
+- The OpenTelemetry metrics pipeline is initialized.
+- A Prometheus scrape endpoint becomes available at **`GET /metrics`** (port 8080).
+- All vclient, MQTT, and commands-topic instruments are exposed.
+
+### Available metrics
+
+**vclient**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `vclient_requests_total` | Counter | `command`, `source` (`timer`/`command`), `result` (`success`/`error`/`exception`) |
+| `vclient_request_duration_seconds` | Histogram | `command`, `source` |
+| `vclient_last_success_timestamp_seconds` | Gauge | `source` |
+| `vclient_errors_total` | Counter | `stage` (`process`/`deserialize`), `reason` (`non_zero_exit_code`/`exception`) |
+
+**MQTT**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `mqtt_client_connected` | Gauge | — |
+| `mqtt_connect_attempts_total` | Counter | `result` (`success`/`failure`) |
+| `mqtt_publish_total` | Counter | `topic`, `result` (`success`/`failure`) |
+| `mqtt_last_publish_timestamp_seconds` | Gauge | `topic` |
+
+**Commands topic**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `mqtt_commands_messages_total` | Counter | `command`, `result` (`success`/`error`) |
+| `mqtt_commands_subscription_active` | Gauge | — |
+
+### Integration
+
+Scrape `/metrics` with Prometheus directly, or route through an OpenTelemetry Collector. The endpoint is unauthenticated; restrict access at the network level if needed.
+
 ## Health Checks
 The container exposes HTTP health check endpoints on port **8080** using ASP.NET Core minimal APIs:
 

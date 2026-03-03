@@ -32,7 +32,7 @@ internal class Worker(ILogger<Worker> logger, MqttService mqtt, VclientService v
             try
             {
                 stoppingToken.ThrowIfCancellationRequested();
-                var result = await vclient.QueryAsync(commands, stoppingToken);
+                var result = await vclient.QueryAsync(commands, "timer", stoppingToken);
 
                 foreach (var r in result.Readings)
                 {

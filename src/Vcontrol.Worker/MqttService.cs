@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Protocol;
@@ -11,6 +10,7 @@ internal class MqttService
 {
     private readonly ILogger<MqttService> _logger;
     private readonly IOptions<MqttOptions> _optionsSnapshot;
+    private readonly VcontrolMetrics _metrics;
 
     private readonly IMqttClient? _client;
     private readonly MqttClientOptions? _clientOptions;
@@ -21,10 +21,11 @@ internal class MqttService
 
     public string? Topic => _optionsSnapshot.Value.Topic;
 
-    public MqttService(ILogger<MqttService> logger, IOptions<MqttOptions> options)
+    public MqttService(ILogger<MqttService> logger, IOptions<MqttOptions> options, VcontrolMetrics metrics)
     {
         _logger = logger;
         _optionsSnapshot = options;
+        _metrics = metrics;
 
         if (!IsConfigured)
         {
@@ -58,11 +59,15 @@ internal class MqttService
             _logger.LogInformation("Connecting to MQTT {Host}:{Port}...", _optionsSnapshot.Value.Host, _optionsSnapshot.Value.Port);
             await _client.ConnectAsync(_clientOptions, ct);
             _logger.LogInformation("Connected to MQTT {Host}:{Port}.", _optionsSnapshot.Value.Host, _optionsSnapshot.Value.Port);
+            _metrics.RecordMqttConnectAttempt(true);
+            _metrics.SetMqttConnected(true);
             return true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to connect to MQTT {Host}:{Port}.", _optionsSnapshot.Value.Host, _optionsSnapshot.Value.Port);
+            _metrics.RecordMqttConnectAttempt(false);
+            _metrics.SetMqttConnected(false);
             return false;
         }
     }
@@ -94,11 +99,13 @@ internal class MqttService
 
             await _client!.PublishAsync(msg, ct);
             _logger.LogInformation("Published payload to MQTT topic {Topic}.", topic);
+            _metrics.RecordMqttPublish(topic, success: true);
             return true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to publish to MQTT topic {Topic}.", topic);
+            _metrics.RecordMqttPublish(topic, success: false);
             return false;
         }
     }

@@ -16,6 +16,7 @@ services:
       MQTT_PASSWORD: "j3qq83y"
       MQTT_TOPIC: "vcontrold"
       COMMANDS: "getTempA,getTempKist,getTempKsoll,getBrennerStatus,getTempRaumNorSollM1,getBetriebArtM1,getBetriebArt"
+      VCONTROL_ENABLE_METRICS: ""  # Set to "true" to enable Prometheus metrics at /metrics
     ports:
       - "3002:3002"  # vcontrold TCP service port
-      - "8080:8080"  # HTTP health check endpoints (/health/live, /health/ready)
+      - "8080:8080"  # HTTP health check endpoints (/health/live, /health/ready) and optional /metrics

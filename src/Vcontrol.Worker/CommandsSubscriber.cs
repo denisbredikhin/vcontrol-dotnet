@@ -1,12 +1,9 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using System.Linq;
 
 namespace Vcontrol.Worker;
 
 
-internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttService mqtt, VclientService vclient) : IHostedService
+internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttService mqtt, VclientService vclient, VcontrolMetrics metrics) : IHostedService
 {
     private Func<string, string, Task>? _handler;
 
@@ -34,7 +31,7 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
 
             try
             {
-                var result = await vclient.QueryAsync(commands, CancellationToken.None);
+                var result = await vclient.QueryAsync(commands, "command", CancellationToken.None);
 
                 foreach (var r in result.Readings)
                 {
@@ -51,10 +48,16 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
                 {
                     logger.LogWarning("vclient exited with code {Code}.", result.ExitCode);
                 }
+
+                var commandResult = result.ExitCode == 0 ? "success" : "error";
+                foreach (var cmd in commands)
+                    metrics.RecordCommandsMessage(cmd, commandResult);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "CommandsSubscriber: exception while executing vclient.");
+                foreach (var cmd in commands)
+                    metrics.RecordCommandsMessage(cmd, "error");
             }
         };
 
@@ -65,6 +68,7 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
             _handler = null;
             return;
         }
+        metrics.SetCommandsSubscriptionActive(true);
         logger.LogInformation("CommandsSubscriber listening on {Base}/commands", mqtt.Topic);
     }
 
@@ -74,6 +78,7 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
         {
             await mqtt.UnsubscribeAsync("commands", _handler, cancellationToken);
             _handler = null;
+            metrics.SetCommandsSubscriptionActive(false);
         }
     }
 }

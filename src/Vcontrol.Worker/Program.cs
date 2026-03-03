@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using Vcontrol.Worker;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -38,6 +40,12 @@ builder.Logging.AddSimpleConsole(options =>
     options.UseUtcTimestamp = false; // set true if you prefer UTC
     options.SingleLine = true;
 });
+
+// Metrics feature flag (disabled by default)
+var enableMetrics = string.Equals(
+    Environment.GetEnvironmentVariable("VCONTROL_ENABLE_METRICS")?.Trim(),
+    "true",
+    StringComparison.OrdinalIgnoreCase);
 
 // Services configuration
 var services = builder.Services;
@@ -102,6 +110,7 @@ services.PostConfigure<VcontrolOptions>(opts =>
 });
 
 // Application services
+services.AddSingleton(_ => new VcontrolMetrics(enableMetrics));
 services.AddSingleton<MqttService>();
 services.AddSingleton<VclientService>();
 services.AddSingleton<LastReplyState>();
@@ -112,10 +121,27 @@ services.AddHostedService<CommandsSubscriber>();
 services.AddHealthChecks()
     .AddCheck<LastReplyHealthCheck>("last_reply");
 
+if (enableMetrics)
+{
+    services.AddOpenTelemetry()
+        .ConfigureResource(r => r.AddService("vcontrol-worker"))
+        .WithMetrics(m => m
+            .AddMeter("vcontrol.mqtt")
+            .AddRuntimeInstrumentation()
+            .AddAspNetCoreInstrumentation()
+            .AddPrometheusExporter());
+}
+
 var app = builder.Build();
 
 // Liveness endpoint - process up
 app.MapGet("/health/live", () => Results.Ok(new { status = "Live" }));
+
+if (enableMetrics)
+{
+    app.UseOpenTelemetryPrometheusScrapingEndpoint();
+}
+
 
 // Readiness endpoint - based on last reply state
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
