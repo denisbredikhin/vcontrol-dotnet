@@ -41,11 +41,13 @@ builder.Logging.AddSimpleConsole(options =>
     options.SingleLine = true;
 });
 
-// Metrics feature flag (disabled by default)
-var enableMetrics = string.Equals(
+// Metrics feature flags (disabled by default)
+var enablePrometheus = string.Equals(
     Environment.GetEnvironmentVariable("VCONTROL_ENABLE_METRICS")?.Trim(),
     "true",
     StringComparison.OrdinalIgnoreCase);
+var enableOtlp = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT"));
+var enableMetrics = enablePrometheus || enableOtlp;
 
 // Services configuration
 var services = builder.Services;
@@ -125,11 +127,16 @@ if (enableMetrics)
 {
     services.AddOpenTelemetry()
         .ConfigureResource(r => r.AddService("vcontrol-worker"))
-        .WithMetrics(m => m
-            .AddMeter("vcontrol.mqtt")
-            .AddRuntimeInstrumentation()
-            .AddAspNetCoreInstrumentation()
-            .AddPrometheusExporter());
+        .WithMetrics(m =>
+        {
+            m.AddMeter("vcontrol.mqtt")
+             .AddRuntimeInstrumentation()
+             .AddAspNetCoreInstrumentation();
+            if (enablePrometheus)
+                m.AddPrometheusExporter();
+            if (enableOtlp)
+                m.AddOtlpExporter();
+        });
 }
 
 var app = builder.Build();
