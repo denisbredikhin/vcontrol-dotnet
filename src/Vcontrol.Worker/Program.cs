@@ -125,8 +125,10 @@ services.AddHealthChecks()
 
 if (enableMetrics)
 {
+    var serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME") ?? "vcontrol-worker";
+
     services.AddOpenTelemetry()
-        .ConfigureResource(r => r.AddService("vcontrol-worker"))
+        .ConfigureResource(r => r.AddService(serviceName))
         .WithMetrics(m =>
         {
             m.AddMeter("vcontrol.mqtt")
