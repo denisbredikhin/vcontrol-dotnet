@@ -131,6 +131,18 @@ When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the full set of standard OTel SDK env
 - **OpenTelemetry Collector / OTLP:** set `OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318` and the worker will push metrics automatically. No port exposure needed.
 - Both exporters can be active simultaneously.
 
+### Local debug with Aspire Dashboard
+
+For a quick local observability setup with no extra infrastructure, use the provided [`docker/docker-compose.aspire.yml`](docker/docker-compose.aspire.yml). It starts the worker alongside the [standalone Aspire Dashboard](https://learn.microsoft.com/dotnet/aspire/fundamentals/dashboard/standalone) — a developer UI that receives metrics, traces, and logs via OTLP/gRPC:
+
+```sh
+docker compose -f docker/docker-compose.aspire.yml up
+```
+
+Then open **http://localhost:18888** — no login token is required (anonymous access is pre-configured). The worker pushes all telemetry automatically; the Prometheus scraping endpoint (`/metrics`) is kept disabled.
+
+> The Aspire Dashboard is a short-lived developer tool. Telemetry is held in memory and is lost on container restart. For production monitoring use Prometheus/Grafana or an OTLP Collector instead.
+
 ## Health Checks
 The container exposes HTTP health check endpoints on port **8080** using ASP.NET Core minimal APIs:
 
