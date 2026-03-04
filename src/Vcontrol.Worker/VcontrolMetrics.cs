@@ -13,7 +13,9 @@ internal sealed class VcontrolMetrics : IDisposable
     private readonly Counter<long>? _mqttPublishTotal;
     private readonly Counter<long>? _mqttCommandsMessagesTotal;
 
-    // State read by observable gauge callbacks
+    // State read by observable gauge callbacks.
+    // Both dictionaries are bounded: _vclientLastSuccessTimestamps has at most two entries ("timer" and "command"),
+    // and _mqttLastPublishTimestamps has at most one entry per configured COMMANDS env-var command.
     private readonly ConcurrentDictionary<string, double> _vclientLastSuccessTimestamps = new();
     private readonly ConcurrentDictionary<string, double> _mqttLastPublishTimestamps = new();
     private volatile int _mqttConnected;
