@@ -6,6 +6,7 @@ namespace Vcontrol.Worker;
 internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttService mqtt, VclientService vclient, VcontrolMetrics metrics) : IHostedService
 {
     private Func<string, string, Task>? _handler;
+    private CancellationToken _stoppingToken;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -15,6 +16,7 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
             return;
         }
 
+        _stoppingToken = cancellationToken;
         _handler = HandleMessageAsync;
 
         var ok = await mqtt.SubscribeAsync("commands", _handler, cancellationToken);
@@ -63,7 +65,7 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
 
     private async Task ExecuteCommandsAsync(List<string> commands)
     {
-        var result = await vclient.QueryAsync(commands, "command", CancellationToken.None);
+        var result = await vclient.QueryAsync(commands, "command", _stoppingToken);
 
         foreach (var r in result.Readings)
             logger.LogInformation("vclient result: {Json}", JsonSerializer.Serialize(r));
