@@ -97,6 +97,7 @@ When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the full set of standard OTel SDK env
 - `OTEL_EXPORTER_OTLP_ENDPOINT` — collector endpoint (e.g. `http://otel-collector:4318`)
 - `OTEL_EXPORTER_OTLP_HEADERS` — authentication headers
 - `OTEL_EXPORTER_OTLP_PROTOCOL` — `grpc` or `http/protobuf`
+- `OTEL_SERVICE_NAME` *(optional)* — service name reported in telemetry; defaults to `vcontrol-dotnet`
 
 ### Available metrics
 

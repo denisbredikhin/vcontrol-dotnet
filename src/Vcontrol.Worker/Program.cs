@@ -125,7 +125,7 @@ services.AddHealthChecks()
 
 if (enableMetrics)
 {
-    var serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME") ?? "vcontrol-worker";
+    var serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME") ?? "vcontrol-dotnet";
 
     services.AddOpenTelemetry()
         .ConfigureResource(r => r.AddService(serviceName))
