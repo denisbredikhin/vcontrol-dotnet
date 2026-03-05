@@ -1,14 +1,12 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using System.Linq;
 
 namespace Vcontrol.Worker;
 
 
-internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttService mqtt, VclientService vclient) : IHostedService
+internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttService mqtt, VclientService vclient, VcontrolMetrics metrics) : IHostedService
 {
     private Func<string, string, Task>? _handler;
+    private CancellationToken _stoppingToken;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -18,45 +16,8 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
             return;
         }
 
-        _handler = async (topic, text) =>
-        {
-            logger.LogInformation("Received on {Topic}: {Payload}", topic, text);
-            var commands = text
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .ToList();
-
-            if (commands.Count == 0)
-            {
-                logger.LogWarning("CommandsSubscriber: empty payload, skipping.");
-                return;
-            }
-
-            try
-            {
-                var result = await vclient.QueryAsync(commands, CancellationToken.None);
-
-                foreach (var r in result.Readings)
-                {
-                    var json = JsonSerializer.Serialize(r);
-                    logger.LogInformation("vclient result: {Json}", json);
-                }
-
-                if (!string.IsNullOrWhiteSpace(result.Stderr))
-                {
-                    logger.LogWarning("vclient stderr: {Stderr}", result.Stderr);
-                }
-
-                if (result.ExitCode != 0)
-                {
-                    logger.LogWarning("vclient exited with code {Code}.", result.ExitCode);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "CommandsSubscriber: exception while executing vclient.");
-            }
-        };
+        _stoppingToken = cancellationToken;
+        _handler = HandleMessageAsync;
 
         var ok = await mqtt.SubscribeAsync("commands", _handler, cancellationToken);
         if (!ok)
@@ -65,6 +26,7 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
             _handler = null;
             return;
         }
+        metrics.SetCommandsSubscriptionActive(true);
         logger.LogInformation("CommandsSubscriber listening on {Base}/commands", mqtt.Topic);
     }
 
@@ -74,6 +36,52 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
         {
             await mqtt.UnsubscribeAsync("commands", _handler, cancellationToken);
             _handler = null;
+            metrics.SetCommandsSubscriptionActive(false);
         }
     }
+
+    private async Task HandleMessageAsync(string topic, string text)
+    {
+        logger.LogInformation("Received on {Topic}: {Payload}", topic, text);
+
+        var commands = ParseCommands(text);
+        if (commands.Count == 0)
+        {
+            logger.LogWarning("CommandsSubscriber: empty payload, skipping.");
+            return;
+        }
+
+        try
+        {
+            await ExecuteCommandsAsync(commands);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "CommandsSubscriber: exception while executing vclient.");
+            foreach (var cmd in commands)
+                metrics.RecordCommandsMessage(cmd, "error");
+        }
+    }
+
+    private async Task ExecuteCommandsAsync(List<string> commands)
+    {
+        var result = await vclient.QueryAsync(commands, "command", _stoppingToken);
+
+        foreach (var r in result.Readings)
+            logger.LogInformation("vclient result: {Json}", JsonSerializer.Serialize(r));
+
+        if (!string.IsNullOrWhiteSpace(result.Stderr))
+            logger.LogWarning("vclient stderr: {Stderr}", result.Stderr);
+
+        if (result.ExitCode != 0)
+            logger.LogWarning("vclient exited with code {Code}.", result.ExitCode);
+
+        var commandResult = result.ExitCode == 0 ? "success" : "error";
+        foreach (var cmd in commands)
+            metrics.RecordCommandsMessage(cmd, commandResult);
+    }
+
+    private static List<string> ParseCommands(string text)
+        => [.. text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                   .Where(s => !string.IsNullOrWhiteSpace(s))];
 }

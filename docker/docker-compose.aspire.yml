@@ -1,0 +1,49 @@
+version: "3.8"
+
+# Debug compose: starts vcontrol-dotnet alongside the standalone Aspire Dashboard.
+# Metrics, traces, and logs are pushed via OTLP/gRPC to the dashboard.
+# Prometheus scraping is intentionally disabled.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.aspire.yml up
+#
+# Open the dashboard at: http://localhost:18888
+# No login token is required (anonymous access is enabled below).
+
+services:
+
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    container_name: aspire-dashboard
+    environment:
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "18888:18888"  # Dashboard UI
+    # Port 18889 (OTLP/gRPC) is not exposed to the host; vcontrol-dotnet
+    # reaches it over the internal Docker network using the service name.
+
+  vcontrol-dotnet:
+    image: ghcr.io/denisbredikhin/vcontrol-dotnet:latest
+    container_name: vcontrol-dotnet
+    restart: unless-stopped
+    depends_on:
+      - aspire-dashboard
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
+    environment:
+      OPTOLINK_DEVICE: "/dev/ttyUSB0"
+      VCONTROLD_PORT: "3002"
+      MQTT_HOST: "192.168.0.48"
+      MQTT_PORT: "1883"
+      MQTT_USER: "mosquitto"
+      MQTT_PASSWORD: "your-password-here"
+      MQTT_TOPIC: "vcontrold"
+      COMMANDS: "getTempA,getTempKist,getTempKsoll,getBrennerStatus,getTempRaumNorSollM1,getBetriebArtM1,getBetriebArt"
+      # OpenTelemetry — push to Aspire Dashboard over the internal network
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-dashboard:18889"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+      OTEL_SERVICE_NAME: "vcontrol-dotnet"
+      # Prometheus scraping endpoint is disabled (ENABLE_PROMETHEUS_EXPORTER not set)
+    ports:
+      - "3002:3002"  # vcontrold TCP service port
+      - "8080:8080"  # HTTP health check endpoints (/health/live, /health/ready)

@@ -13,9 +13,11 @@ services:
       MQTT_HOST: "192.168.0.48"
       MQTT_PORT: "1883"
       MQTT_USER: "mosquitto"
-      MQTT_PASSWORD: "j3qq83y"
+      MQTT_PASSWORD: "your-password-here"
       MQTT_TOPIC: "vcontrold"
       COMMANDS: "getTempA,getTempKist,getTempKsoll,getBrennerStatus,getTempRaumNorSollM1,getBetriebArtM1,getBetriebArt"
+      ENABLE_PROMETHEUS_EXPORTER: ""  # Set to "true" to enable Prometheus metrics at /metrics
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""  # Set to push metrics via OTLP, e.g. "http://otel-collector:4318"
     ports:
       - "3002:3002"  # vcontrold TCP service port
-      - "8080:8080"  # HTTP health check endpoints (/health/live, /health/ready)
+      - "8080:8080"  # HTTP health check endpoints (/health/live, /health/ready) and optional /metrics

@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using Vcontrol.Worker;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -38,6 +40,14 @@ builder.Logging.AddSimpleConsole(options =>
     options.UseUtcTimestamp = false; // set true if you prefer UTC
     options.SingleLine = true;
 });
+
+// Metrics feature flags (disabled by default)
+var enablePrometheus = string.Equals(
+    Environment.GetEnvironmentVariable("ENABLE_PROMETHEUS_EXPORTER")?.Trim(),
+    "true",
+    StringComparison.OrdinalIgnoreCase);
+var enableOtlp = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT"));
+var enableMetrics = enablePrometheus || enableOtlp;
 
 // Services configuration
 var services = builder.Services;
@@ -102,6 +112,7 @@ services.PostConfigure<VcontrolOptions>(opts =>
 });
 
 // Application services
+services.AddSingleton(_ => new VcontrolMetrics(enableMetrics));
 services.AddSingleton<MqttService>();
 services.AddSingleton<VclientService>();
 services.AddSingleton<LastReplyState>();
@@ -112,10 +123,34 @@ services.AddHostedService<CommandsSubscriber>();
 services.AddHealthChecks()
     .AddCheck<LastReplyHealthCheck>("last_reply");
 
+if (enableMetrics)
+{
+    var serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME") ?? "vcontrol-dotnet";
+
+    services.AddOpenTelemetry()
+        .ConfigureResource(r => r.AddService(serviceName))
+        .WithMetrics(m =>
+        {
+            m.AddMeter("vcontrol.mqtt")
+             .AddRuntimeInstrumentation()
+             .AddAspNetCoreInstrumentation();
+            if (enablePrometheus)
+                m.AddPrometheusExporter();
+            if (enableOtlp)
+                m.AddOtlpExporter();
+        });
+}
+
 var app = builder.Build();
 
 // Liveness endpoint - process up
 app.MapGet("/health/live", () => Results.Ok(new { status = "Live" }));
+
+if (enablePrometheus)
+{
+    app.UseOpenTelemetryPrometheusScrapingEndpoint();
+}
+
 
 // Readiness endpoint - based on last reply state
 app.MapHealthChecks("/health/ready", new HealthCheckOptions

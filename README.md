@@ -77,6 +77,73 @@ Behavioral notes:
 - Subscribing service listens on `MQTT_TOPIC/commands` and executes payloads as CSV commands.
 - Logging uses `ILogger` with timestamps.
 
+## Metrics & Observability
+
+Metrics are implemented using `System.Diagnostics.Metrics` (meter name `vcontrol.mqtt`) and are compatible with Prometheus / OpenTelemetry naming conventions.
+
+### Enabling metrics
+
+Metrics are **disabled by default**. Two independent env vars activate the pipeline:
+
+| Variable | Effect when set |
+|---|---|
+| `ENABLE_PROMETHEUS_EXPORTER=true` | Enables Prometheus scrape endpoint at `GET /metrics` (port 8080) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT=<url>` | Enables OTLP push export to the given endpoint |
+
+Either variable (or both) activates the shared OpenTelemetry pipeline (meter, runtime instrumentation, ASP.NET Core instrumentation). They can be combined.
+
+When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the full set of standard OTel SDK env vars is respected automatically — no extra configuration is required:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT` — collector endpoint (e.g. `http://otel-collector:4318`)
+- `OTEL_EXPORTER_OTLP_HEADERS` — authentication headers
+- `OTEL_EXPORTER_OTLP_PROTOCOL` — `grpc` or `http/protobuf`
+- `OTEL_SERVICE_NAME` *(optional)* — service name reported in telemetry; defaults to `vcontrol-dotnet`
+
+### Available metrics
+
+**vclient**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `vclient_requests_total` | Counter | `command`, `source` (`timer`/`command`), `result` (`success`/`error`) |
+| `vclient_request_duration_seconds` | Histogram | `command`, `source` |
+| `vclient_last_success_timestamp_seconds` | Gauge | `source` |
+| `vclient_errors_total` | Counter | `stage` (`process`/`deserialize`), `reason` (`non_zero_exit_code`/`exception`) |
+
+**MQTT**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `mqtt_client_connected` | Gauge | — |
+| `mqtt_connect_attempts_total` | Counter | `result` (`success`/`failure`) |
+| `mqtt_publish_total` | Counter | `topic`, `result` (`success`/`failure`) |
+| `mqtt_last_publish_timestamp_seconds` | Gauge | `topic` |
+
+**Commands topic**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `mqtt_commands_messages_total` | Counter | `command`, `result` (`success`/`error`) |
+| `mqtt_commands_subscription_active` | Gauge | — |
+
+### Integration
+
+- **Prometheus:** set `ENABLE_PROMETHEUS_EXPORTER=true` and scrape `http://<host>:8080/metrics`. Expose port 8080 in your Compose or `docker run` command.
+- **OpenTelemetry Collector / OTLP:** set `OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318` and the worker will push metrics automatically. No port exposure needed.
+- Both exporters can be active simultaneously.
+
+### Local debug with Aspire Dashboard
+
+For a quick local observability setup with no extra infrastructure, use the provided [`docker/docker-compose.aspire.yml`](docker/docker-compose.aspire.yml). It starts the worker alongside the [standalone Aspire Dashboard](https://learn.microsoft.com/dotnet/aspire/fundamentals/dashboard/standalone) — a developer UI that receives metrics, traces, and logs via OTLP/gRPC:
+
+```sh
+docker compose -f docker/docker-compose.aspire.yml up
+```
+
+Then open **http://localhost:18888** — no login token is required (anonymous access is pre-configured). The worker pushes all telemetry automatically; the Prometheus scraping endpoint (`/metrics`) is kept disabled.
+
+> The Aspire Dashboard is a short-lived developer tool. Telemetry is held in memory and is lost on container restart. For production monitoring use Prometheus/Grafana or an OTLP Collector instead.
+
 ## Health Checks
 The container exposes HTTP health check endpoints on port **8080** using ASP.NET Core minimal APIs:
 
