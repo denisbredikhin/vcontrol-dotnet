@@ -123,10 +123,25 @@ internal sealed class VclientService(ILogger<VclientService> logger, IOptions<Vc
             var result = exitCode == 0 ? "success" : "error";
             metrics.RecordVclientRequest(cmd, src, result);
             metrics.RecordVclientDuration(cmd, src, seconds);
-            if (exitCode != 0)
-                metrics.RecordVclientError("process", "non_zero_exit_code");
-            else
+
+            if (exitCode == 0)
+            {
                 metrics.UpdateVclientLastSuccess(src);
+                return;
+            }
+
+            // Map sentinel/internal exit codes to specific reasons and reserve
+            // "non_zero_exit_code" for real process exit codes (> 0).
+            string reason = exitCode > 0
+                ? "non_zero_exit_code"
+                : exitCode switch
+                {
+                    -1 => "exception",      // e.g. failed start / internal exception
+                    -3 => "timeout",        // e.g. semaphore / execution timeout
+                    _  => "internal_error"  // other internal/sentinel codes
+                };
+
+            metrics.RecordVclientError("process", reason);
         }
     }
 
