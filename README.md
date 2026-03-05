@@ -104,7 +104,7 @@ When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the full set of standard OTel SDK env
 
 | Metric | Type | Labels |
 |--------|------|--------|
-| `vclient_requests_total` | Counter | `command`, `source` (`timer`/`command`), `result` (`success`/`error`/`exception`) |
+| `vclient_requests_total` | Counter | `command`, `source` (`timer`/`command`), `result` (`success`/`error`) |
 | `vclient_request_duration_seconds` | Histogram | `command`, `source` |
 | `vclient_last_success_timestamp_seconds` | Gauge | `source` |
 | `vclient_errors_total` | Counter | `stage` (`process`/`deserialize`), `reason` (`non_zero_exit_code`/`exception`) |
