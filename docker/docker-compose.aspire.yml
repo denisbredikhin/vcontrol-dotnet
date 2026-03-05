@@ -36,7 +36,7 @@ services:
       MQTT_HOST: "192.168.0.48"
       MQTT_PORT: "1883"
       MQTT_USER: "mosquitto"
-      MQTT_PASSWORD: "j3qq83y"
+      MQTT_PASSWORD: "your-password-here"
       MQTT_TOPIC: "vcontrold"
       COMMANDS: "getTempA,getTempKist,getTempKsoll,getBrennerStatus,getTempRaumNorSollM1,getBetriebArtM1,getBetriebArt"
       # OpenTelemetry — push to Aspire Dashboard over the internal network
