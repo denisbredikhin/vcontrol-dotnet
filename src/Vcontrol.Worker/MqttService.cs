@@ -40,6 +40,9 @@ internal class MqttService
             .WithTcpServer(_optionsSnapshot.Value.Host!, _optionsSnapshot.Value.Port)
             .WithCredentials(_optionsSnapshot.Value.User ?? string.Empty, _optionsSnapshot.Value.Password ?? string.Empty)
             .Build();
+
+        _client.ConnectedAsync += _ => { _metrics.SetMqttConnected(true); return Task.CompletedTask; };
+        _client.DisconnectedAsync += _ => { _metrics.SetMqttConnected(false); return Task.CompletedTask; };
     }
 
     private async Task<bool> EnsureConnectedAsync(CancellationToken ct)
@@ -60,14 +63,12 @@ internal class MqttService
             await _client.ConnectAsync(_clientOptions, ct);
             _logger.LogInformation("Connected to MQTT {Host}:{Port}.", _optionsSnapshot.Value.Host, _optionsSnapshot.Value.Port);
             _metrics.RecordMqttConnectAttempt(true);
-            _metrics.SetMqttConnected(true);
             return true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to connect to MQTT {Host}:{Port}.", _optionsSnapshot.Value.Host, _optionsSnapshot.Value.Port);
             _metrics.RecordMqttConnectAttempt(false);
-            _metrics.SetMqttConnected(false);
             return false;
         }
     }
