@@ -91,7 +91,9 @@ internal sealed class VclientService(ILogger<VclientService> logger, IOptions<Vc
             return new VclientQueryResult { Readings = [], Stderr = string.Empty, ExitCode = 0 };
         }
 
-        var commandKey = string.Join(',', cmdList);
+        var commandKey = cmdList.Count == 1
+            ? cmdList[0].Split(' ', 2)[0]
+            : "composite-command";
         var sw = Stopwatch.StartNew();
         var proc = await RunAsync(cmdList, ct);
         sw.Stop();
