@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using Vcontrol.Worker;
@@ -127,7 +128,7 @@ if (enableMetrics)
 {
     var serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME") ?? "vcontrol-dotnet";
 
-    services.AddOpenTelemetry()
+    var otelBuilder = services.AddOpenTelemetry()
         .ConfigureResource(r => r.AddService(serviceName))
         .WithMetrics(m =>
         {
@@ -139,6 +140,17 @@ if (enableMetrics)
             if (enableOtlp)
                 m.AddOtlpExporter();
         });
+
+    if (enableOtlp)
+    {
+        otelBuilder.WithLogging(
+            configureBuilder: l => l.AddOtlpExporter(),
+            configureOptions: o =>
+            {
+                o.IncludeFormattedMessage = true;
+                o.IncludeScopes = true;
+            });
+    }
 }
 
 var app = builder.Build();

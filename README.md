@@ -79,18 +79,18 @@ Behavioral notes:
 
 ## Metrics & Observability
 
-Metrics are implemented using `System.Diagnostics.Metrics` (meter name `vcontrol.mqtt`) and are compatible with Prometheus / OpenTelemetry naming conventions.
+Metrics are implemented using `System.Diagnostics.Metrics` (meter name `vcontrol.mqtt`) and are compatible with Prometheus / OpenTelemetry naming conventions. When OTLP export is enabled, structured logs produced via `ILogger` are also exported over OTLP alongside metrics.
 
-### Enabling metrics
+### Enabling metrics and logs
 
 Metrics are **disabled by default**. Two independent env vars activate the pipeline:
 
 | Variable | Effect when set |
 |---|---|
 | `ENABLE_PROMETHEUS_EXPORTER=true` | Enables Prometheus scrape endpoint at `GET /metrics` (port 8080) |
-| `OTEL_EXPORTER_OTLP_ENDPOINT=<url>` | Enables OTLP push export to the given endpoint |
+| `OTEL_EXPORTER_OTLP_ENDPOINT=<url>` | Enables OTLP push export of **metrics and logs** to the given endpoint |
 
-Either variable (or both) activates the shared OpenTelemetry pipeline (meter, runtime instrumentation, ASP.NET Core instrumentation). They can be combined.
+Either variable (or both) activates the shared OpenTelemetry pipeline (meter, runtime instrumentation, ASP.NET Core instrumentation). They can be combined. Structured log export via OTLP is active only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
 
 When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the full set of standard OTel SDK env vars is respected automatically — no extra configuration is required:
 
@@ -129,7 +129,7 @@ When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the full set of standard OTel SDK env
 ### Integration
 
 - **Prometheus:** set `ENABLE_PROMETHEUS_EXPORTER=true` and scrape `http://<host>:8080/metrics`. Expose port 8080 in your Compose or `docker run` command.
-- **OpenTelemetry Collector / OTLP:** set `OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318` and the worker will push metrics automatically. No port exposure needed.
+- **OpenTelemetry Collector / OTLP:** set `OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318` and the worker will push metrics and structured logs automatically. No port exposure needed.
 - Both exporters can be active simultaneously.
 
 ### Local debug with Aspire Dashboard
