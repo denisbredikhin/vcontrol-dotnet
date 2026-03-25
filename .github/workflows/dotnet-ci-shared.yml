@@ -108,7 +108,7 @@ jobs:
       - name: Publish unit test report
         if: ${{ always() && steps.trx_files.outputs.has_trx == 'true' }}
         continue-on-error: true
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@v3
         with:
           name: Unit Tests (${{ inputs.artifact_prefix }})
           path: '**/TestResults/**/*.trx'
