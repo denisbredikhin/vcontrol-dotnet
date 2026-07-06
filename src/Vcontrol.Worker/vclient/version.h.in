@@ -1,0 +1,10 @@
+// SPDX-FileCopyrightText: 2017-2022 Tobias Leupold <tl at stonemx dot de>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#ifndef VERSION_H
+#define VERSION_H
+
+#define VERSION "@VERSION@"
+
+#endif // VERSION_H

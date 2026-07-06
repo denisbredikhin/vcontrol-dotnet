@@ -14,8 +14,10 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Vcontrol.Worker/Vcontrol.Worker.csproj" />
+    <Project Path="src/Vcontrol.Worker/vclient-dotnet/Vcontrol.Vclient.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Vcontrol.Worker.Tests/Vcontrol.Worker.Tests.csproj" />
+    <Project Path="tests/Vclient.DotNet.Tests/Vclient.DotNet.Tests.csproj" />
   </Folder>
 </Solution>

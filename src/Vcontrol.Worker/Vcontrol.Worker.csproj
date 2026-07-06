@@ -19,4 +19,8 @@
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.15.0-beta.1" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="vclient-dotnet\**\*.cs" />
+  </ItemGroup>
 </Project>
