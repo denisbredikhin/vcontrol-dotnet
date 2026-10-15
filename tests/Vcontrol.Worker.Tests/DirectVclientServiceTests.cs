@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using AwesomeAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -9,6 +11,21 @@ namespace Vcontrol.Worker.Tests;
 
 public sealed class DirectVclientServiceTests
 {
+    [Fact]
+    public async Task Invalid_port_fails_host_startup()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddOptions<VcontrolOptions>()
+            .Configure(options => options.Port = 65536)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        using var host = builder.Build();
+
+        await Assert.ThrowsAsync<OptionsValidationException>(
+            () => host.StartAsync(TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public async Task QueryAsync_sends_commands_and_returns_readings_from_vcontrold()
     {

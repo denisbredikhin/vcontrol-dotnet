@@ -117,6 +117,9 @@ services.PostConfigure<VcontrolOptions>(opts =>
         opts.UseDirectConnection = useDirectConnection;
     }
 });
+services.AddOptions<VcontrolOptions>()
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 // Application services
 services.AddSingleton(_ => new VcontrolMetrics(enableMetrics));
