@@ -37,7 +37,9 @@ This is a single .NET 10 `Microsoft.NET.Sdk.Web` worker service (`src/Vcontrol.W
 | `Worker` | `BackgroundService` — polls `vclient` on a configurable interval, publishes readings to MQTT |
 | `CommandsSubscriber` | `IHostedService` — subscribes to `{MQTT_TOPIC}/commands`, executes on-demand CSV payloads |
 | `MqttService` | Manages MQTTnet connection; lazy-connects on first publish/subscribe |
-| `VclientService` | Wraps `vclient` CLI process execution; serialized with a `SemaphoreSlim(1,1)` |
+| `IVclientService` | Shared query contract used by the worker and MQTT command subscriber |
+| `VclientService` | Default implementation wrapping `vclient` CLI process execution |
+| `DirectVclientService` | Experimental direct TCP implementation; selected with `VCLIENT_DIRECT_CONNECTION=true` |
 | `LastReplyState` | Thread-safe state bag tracking last vclient success/failure (used by health check) |
 | `LastReplyHealthCheck` | ASP.NET Core `IHealthCheck` — exposes readiness status |
 | `VcontrolMetrics` | Singleton holding all `System.Diagnostics.Metrics` instruments; no-op when metrics disabled |
@@ -52,6 +54,8 @@ This is a single .NET 10 `Microsoft.NET.Sdk.Web` worker service (`src/Vcontrol.W
 **vclient `source` label:** `VclientService.QueryAsync` takes a `source` string passed by the caller — `"timer"` from `Worker` and `"command"` from `CommandsSubscriber`. All vclient metrics are recorded inside `QueryAsync`.
 
 **Configuration layering:** Options are bound from ASP.NET Core configuration sections (`Mqtt:*`, `Vcontrol:*`) and then overridden by flat environment variables (`MQTT_HOST`, `VCONTROLD_PORT`, `COMMANDS`, etc.) via `PostConfigure` in `Program.cs`. Both styles work simultaneously.
+
+**Direct vcontrold mode:** `VCLIENT_DIRECT_CONNECTION=true` selects `DirectVclientService`; it connects to `Vcontrol:Host`/`Vcontrol:Port` (or `VCONTROLD_HOST`/`VCONTROLD_PORT`) and bypasses the `vclient` process. The default is `false`.
 
 **vclient output format:** `vclient --json-long` returns a JSON array of `VclientReading` objects (`command`, `value`, `raw`, `error`). Each reading is published to `{MQTT_TOPIC}/{command}` as either full JSON or the raw `Value` string (controlled by `PUBLISH_VALUE_ONLY`).
 

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace Vcontrol.Worker;
 
-internal sealed class VclientService(ILogger<VclientService> logger, IOptions<VcontrolOptions> options, VcontrolMetrics metrics) : IDisposable
+internal sealed class VclientService(ILogger<VclientService> logger, IOptions<VcontrolOptions> options, VcontrolMetrics metrics) : IVclientService, IDisposable
 {
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 

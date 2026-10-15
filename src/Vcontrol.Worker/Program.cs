@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -79,6 +80,7 @@ services.PostConfigure<VcontrolOptions>(opts =>
     var commandsEnv = Environment.GetEnvironmentVariable("COMMANDS");
     var pollEnv = Environment.GetEnvironmentVariable("POLL_SECONDS");
     var publishValueOnlyEnv = Environment.GetEnvironmentVariable("PUBLISH_VALUE_ONLY");
+    var directConnectionEnv = Environment.GetEnvironmentVariable("VCLIENT_DIRECT_CONNECTION");
     if (!string.IsNullOrWhiteSpace(hostEnv)) opts.Host = hostEnv;
     if (int.TryParse(portEnv, out var p)) opts.Port = p;
     if (!string.IsNullOrWhiteSpace(commandsEnv))
@@ -110,12 +112,25 @@ services.PostConfigure<VcontrolOptions>(opts =>
             opts.PublishValueOnly = false;
         }
     }
+    if (bool.TryParse(directConnectionEnv, out var useDirectConnection))
+    {
+        opts.UseDirectConnection = useDirectConnection;
+    }
 });
+services.AddOptions<VcontrolOptions>()
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 // Application services
 services.AddSingleton(_ => new VcontrolMetrics(enableMetrics));
 services.AddSingleton<MqttService>();
-services.AddSingleton<VclientService>();
+services.AddSingleton<IVclientService>(serviceProvider =>
+{
+    var options = serviceProvider.GetRequiredService<IOptions<VcontrolOptions>>().Value;
+    return options.UseDirectConnection
+        ? ActivatorUtilities.CreateInstance<DirectVclientService>(serviceProvider)
+        : ActivatorUtilities.CreateInstance<VclientService>(serviceProvider);
+});
 services.AddSingleton<LastReplyState>();
 services.AddHostedService<Worker>();
 services.AddHostedService<CommandsSubscriber>();

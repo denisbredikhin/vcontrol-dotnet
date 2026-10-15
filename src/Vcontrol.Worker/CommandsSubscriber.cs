@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace Vcontrol.Worker;
 
 
-internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttService mqtt, VclientService vclient, VcontrolMetrics metrics) : IHostedService
+internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, MqttService mqtt, IVclientService vclient, VcontrolMetrics metrics) : IHostedService
 {
     private Func<string, string, Task>? _handler;
     private CancellationToken _stoppingToken;

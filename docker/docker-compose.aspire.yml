@@ -33,6 +33,7 @@ services:
     environment:
       OPTOLINK_DEVICE: "/dev/ttyUSB0"
       VCONTROLD_PORT: "3002"
+      VCLIENT_DIRECT_CONNECTION: "false" # Experimental direct TCP client; set true to bypass the vclient process
       MQTT_HOST: "192.168.0.48"
       MQTT_PORT: "1883"
       MQTT_USER: "mosquitto"

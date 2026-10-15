@@ -38,6 +38,7 @@ services:
       OPTOLINK_DEVICE: "/dev/ttyUSB0"
       VCONTROLD_HOST: "127.0.0.1"
       VCONTROLD_PORT: "3002"
+      VCLIENT_DIRECT_CONNECTION: "false"
       COMMANDS: "get_temp,get_pressure"
       MQTT_HOST: "mqtt.local"
       MQTT_PORT: "1883"
@@ -66,6 +67,7 @@ Key environment variables (all strings unless noted):
 - `OPTOLINK_DEVICE`: Path to the USB device inside the container (e.g., `/dev/ttyUSB0`).
 - `VCONTROLD_HOST`: Host for the worker to reach `vcontrold` (default `127.0.0.1`).
 - `VCONTROLD_PORT`: TCP port for `vcontrold` (default `3002`).
+- `VCLIENT_DIRECT_CONNECTION` (bool, default `false`): Experimental mode that connects to `vcontrold` directly from the worker instead of launching the `vclient` process. Set to `true` to enable it.
 - `COMMANDS` (required): Comma-separated `vclient` commands to run in a batch (e.g., `get_temp,get_pressure`).
 - `POLL_SECONDS` (int): Worker polling interval in seconds (default `60`).
 - `PUBLISH_VALUE_ONLY` (bool-like): When set (e.g., `true`), publishes only the `Value` field; otherwise publishes full JSON.
