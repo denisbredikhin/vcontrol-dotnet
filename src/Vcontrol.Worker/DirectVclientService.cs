@@ -103,7 +103,7 @@ internal sealed class DirectVclientService(
     private static VclientReading ParseReading(string command, string raw)
     {
         var valueText = raw.TrimEnd('\r', '\n', '\t', ' ');
-        var reading = new VclientReading { Command = command, Raw = valueText };
+        var reading = new VclientReading { Command = command, Raw = valueText, Value = 0 };
         if (valueText.StartsWith("ERR:", StringComparison.Ordinal))
         {
             reading.Error = valueText;
