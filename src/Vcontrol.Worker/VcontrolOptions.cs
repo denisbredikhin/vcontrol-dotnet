@@ -7,4 +7,5 @@ internal class VcontrolOptions
     public List<string> Commands { get; set; } = [];
     public int PollSeconds { get; set; } = 60;
     public bool PublishValueOnly { get; set; }
+    public bool UseDirectConnection { get; set; }
 }
