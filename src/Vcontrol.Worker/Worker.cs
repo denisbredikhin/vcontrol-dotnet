@@ -33,9 +33,17 @@ internal class Worker(ILogger<Worker> logger, MqttService mqtt, IVclientService 
             {
                 stoppingToken.ThrowIfCancellationRequested();
                 var result = await vclient.QueryAsync(commands, "timer", stoppingToken);
+                List<string> readingErrors = [];
 
                 foreach (var r in result.Readings)
                 {
+                    if (!string.IsNullOrWhiteSpace(r.Error))
+                    {
+                        logger.LogWarning("{Command} returned error: {Error}", r.Command, r.Error);
+                        readingErrors.Add($"{r.Command}: {r.Error}");
+                        continue;
+                    }
+
                     var topicPart = SanitizeTopicPart(r.Command ?? "");
                     string payload = vcontrolOptions.Value.PublishValueOnly
                         ? r.Value?.ToString("G", CultureInfo.InvariantCulture) ?? string.Empty
@@ -57,6 +65,10 @@ internal class Worker(ILogger<Worker> logger, MqttService mqtt, IVclientService 
                 {
                     logger.LogWarning("vclient exited with code {Code}.", result.ExitCode);
                     lastReplyState.ReportFailure(result.ExitCode, string.IsNullOrWhiteSpace(result.Stderr) ? "vclient exited with non-zero exit code." : result.Stderr);
+                }
+                else if (readingErrors.Count > 0)
+                {
+                    lastReplyState.ReportFailure(result.ExitCode, string.Join(Environment.NewLine, readingErrors));
                 }
                 else
                 {

@@ -68,7 +68,12 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
         var result = await vclient.QueryAsync(commands, "command", _stoppingToken);
 
         foreach (var r in result.Readings)
-            logger.LogInformation("vclient result: {Json}", JsonSerializer.Serialize(r));
+        {
+            if (string.IsNullOrWhiteSpace(r.Error))
+                logger.LogInformation("vclient result: {Json}", JsonSerializer.Serialize(r));
+            else
+                logger.LogWarning("vclient error result: {Json}", JsonSerializer.Serialize(r));
+        }
 
         if (!string.IsNullOrWhiteSpace(result.Stderr))
             logger.LogWarning("vclient stderr: {Stderr}", result.Stderr);
@@ -76,9 +81,15 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
         if (result.ExitCode != 0)
             logger.LogWarning("vclient exited with code {Code}.", result.ExitCode);
 
-        var commandResult = result.ExitCode == 0 ? "success" : "error";
+        var failedCommands = result.Readings
+            .Where(r => !string.IsNullOrWhiteSpace(r.Error) && r.Command != null)
+            .Select(r => r.Command!)
+            .ToHashSet(StringComparer.Ordinal);
         foreach (var cmd in commands)
+        {
+            var commandResult = result.ExitCode == 0 && !failedCommands.Contains(cmd) ? "success" : "error";
             metrics.RecordCommandsMessage(cmd, commandResult);
+        }
     }
 
     private static List<string> ParseCommands(string text)
