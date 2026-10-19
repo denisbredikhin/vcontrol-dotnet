@@ -33,47 +33,8 @@ internal class Worker(ILogger<Worker> logger, MqttService mqtt, IVclientService 
             {
                 stoppingToken.ThrowIfCancellationRequested();
                 var result = await vclient.QueryAsync(commands, "timer", stoppingToken);
-                List<string> readingErrors = [];
-
-                foreach (var r in result.Readings)
-                {
-                    if (!string.IsNullOrWhiteSpace(r.Error))
-                    {
-                        logger.LogWarning("{Command} returned error: {Error}", r.Command, r.Error);
-                        readingErrors.Add($"{r.Command}: {r.Error}");
-                        continue;
-                    }
-
-                    var topicPart = SanitizeTopicPart(r.Command ?? "");
-                    string payload = vcontrolOptions.Value.PublishValueOnly
-                        ? r.Value?.ToString("G", CultureInfo.InvariantCulture) ?? string.Empty
-                        : JsonSerializer.Serialize(r);
-                    logger.LogInformation("{Command}: {Payload}", r.Command, payload);
-                    var published = await mqtt.PublishToAsync(topicPart, payload, stoppingToken);
-                    if (!published)
-                    {
-                        logger.LogDebug("MQTT publish skipped or failed for {Command}.", r.Command);
-                    }
-                }
-
-                if (!string.IsNullOrWhiteSpace(result.Stderr))
-                {
-                    logger.LogWarning("vclient stderr: {Stderr}", result.Stderr);
-                }
-
-                if (result.ExitCode != 0)
-                {
-                    logger.LogWarning("vclient exited with code {Code}.", result.ExitCode);
-                    lastReplyState.ReportFailure(result.ExitCode, string.IsNullOrWhiteSpace(result.Stderr) ? "vclient exited with non-zero exit code." : result.Stderr);
-                }
-                else if (readingErrors.Count > 0)
-                {
-                    lastReplyState.ReportFailure(result.ExitCode, string.Join(Environment.NewLine, readingErrors));
-                }
-                else
-                {
-                    lastReplyState.ReportSuccess(result.ExitCode, result.Stderr);
-                }
+                var readingError = await PublishReadingsAsync(result.Readings, stoppingToken);
+                ReportResult(result, readingError);
 
                 await Task.Delay(TimeSpan.FromSeconds(pollSeconds), stoppingToken);
             }
@@ -82,6 +43,55 @@ internal class Worker(ILogger<Worker> logger, MqttService mqtt, IVclientService 
                 logger.LogError(ex, "Worker exception.");
                 lastReplyState.ReportFailure(-1, ex.Message);
             }
+        }
+    }
+
+    private async Task<string?> PublishReadingsAsync(IReadOnlyList<VclientReading> readings, CancellationToken stoppingToken)
+    {
+        List<string> readingErrors = [];
+        foreach (var r in readings)
+        {
+            if (!string.IsNullOrWhiteSpace(r.Error))
+            {
+                logger.LogWarning("{Command} returned error: {Error}", r.Command, r.Error);
+                readingErrors.Add($"{r.Command}: {r.Error}");
+                continue;
+            }
+
+            var topicPart = SanitizeTopicPart(r.Command ?? "");
+            string payload = vcontrolOptions.Value.PublishValueOnly
+                ? r.Value?.ToString("G", CultureInfo.InvariantCulture) ?? string.Empty
+                : JsonSerializer.Serialize(r);
+            logger.LogInformation("{Command}: {Payload}", r.Command, payload);
+            var published = await mqtt.PublishToAsync(topicPart, payload, stoppingToken);
+            if (!published)
+            {
+                logger.LogDebug("MQTT publish skipped or failed for {Command}.", r.Command);
+            }
+        }
+
+        return readingErrors.Count > 0 ? string.Join(Environment.NewLine, readingErrors) : null;
+    }
+
+    private void ReportResult(VclientQueryResult result, string? readingError)
+    {
+        if (!string.IsNullOrWhiteSpace(result.Stderr))
+        {
+            logger.LogWarning("vclient stderr: {Stderr}", result.Stderr);
+        }
+
+        if (result.ExitCode != 0)
+        {
+            logger.LogWarning("vclient exited with code {Code}.", result.ExitCode);
+            lastReplyState.ReportFailure(result.ExitCode, string.IsNullOrWhiteSpace(result.Stderr) ? "vclient exited with non-zero exit code." : result.Stderr);
+        }
+        else if (readingError != null)
+        {
+            lastReplyState.ReportFailure(result.ExitCode, readingError);
+        }
+        else
+        {
+            lastReplyState.ReportSuccess(result.ExitCode, result.Stderr);
         }
     }
 

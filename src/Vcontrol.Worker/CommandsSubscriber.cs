@@ -70,9 +70,13 @@ internal sealed class CommandsSubscriber(ILogger<CommandsSubscriber> logger, Mqt
         foreach (var r in result.Readings)
         {
             if (string.IsNullOrWhiteSpace(r.Error))
+            {
                 logger.LogInformation("vclient result: {Json}", JsonSerializer.Serialize(r));
+            }
             else
+            {
                 logger.LogWarning("vclient error result: {Json}", JsonSerializer.Serialize(r));
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(result.Stderr))
