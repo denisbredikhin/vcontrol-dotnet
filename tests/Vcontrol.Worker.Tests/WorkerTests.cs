@@ -50,27 +50,32 @@ public sealed class WorkerTests
 
     private static async Task<LastReplySnapshot> RunWorkerOnceAsync(VclientQueryResult result)
     {
-        var ct = TestContext.Current.CancellationToken;
+        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         using var metrics = new VcontrolMetrics(enabled: false);
         var mqtt = new MqttService(NullLogger<MqttService>.Instance, Options.Create(new MqttOptions()), metrics);
         var state = new LastReplyState();
-        var vclient = new FakeVclientService(result);
+        var vclient = new FakeVclientService(result, stopping);
         var options = Options.Create(new VcontrolOptions { Commands = ["getTemp", "getBetriebArt"], PollSeconds = 3600 });
-        using var sut = new Worker(NullLogger<Worker>.Instance, mqtt, vclient, options, state);
+        using var sut = new TestableWorker(mqtt, vclient, options, state);
 
-        await sut.StartAsync(ct);
-        while (!state.GetSnapshot().HasReported)
-        {
-            await Task.Delay(10, ct);
-        }
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sut.RunAsync(stopping.Token));
 
-        await sut.StopAsync(ct);
         return state.GetSnapshot();
     }
 
-    private sealed class FakeVclientService(VclientQueryResult result) : IVclientService
+    private sealed class TestableWorker(MqttService mqtt, IVclientService vclient, IOptions<VcontrolOptions> options, LastReplyState state)
+        : Worker(NullLogger<Worker>.Instance, mqtt, vclient, options, state)
     {
-        public Task<VclientQueryResult> QueryAsync(IEnumerable<string> commands, string source, CancellationToken ct)
-            => Task.FromResult(result);
+        public Task RunAsync(CancellationToken stoppingToken) => ExecuteAsync(stoppingToken);
+    }
+
+    // Cancels the stopping token once queried so the worker completes exactly one polling cycle.
+    private sealed class FakeVclientService(VclientQueryResult result, CancellationTokenSource stopping) : IVclientService
+    {
+        public async Task<VclientQueryResult> QueryAsync(IEnumerable<string> commands, string source, CancellationToken ct)
+        {
+            await stopping.CancelAsync();
+            return result;
+        }
     }
 }
