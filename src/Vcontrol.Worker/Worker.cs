@@ -25,7 +25,15 @@ internal class Worker(ILogger<Worker> logger, MqttService mqtt, IVclientService 
             throw new InvalidOperationException("COMMANDS is required");
         }
         var pollSeconds = vcontrolOptions.Value.PollSeconds <= 0 ? 60 : vcontrolOptions.Value.PollSeconds;
-        logger.LogInformation("Starting periodic batch of {Count} commands every {Poll}s on {Host}:{Port}...", commands.Count, pollSeconds, vcontrolOptions.Value.Host, vcontrolOptions.Value.Port);
+        if (vcontrolOptions.Value.UseNativeConnection)
+        {
+            logger.LogInformation("Starting periodic batch of {Count} commands every {Poll}s directly on Optolink device {Device}...",
+                commands.Count, pollSeconds, vcontrolOptions.Value.OptolinkDevice);
+        }
+        else
+        {
+            logger.LogInformation("Starting periodic batch of {Count} commands every {Poll}s on {Host}:{Port}...", commands.Count, pollSeconds, vcontrolOptions.Value.Host, vcontrolOptions.Value.Port);
+        }
 
         while (true)
         {

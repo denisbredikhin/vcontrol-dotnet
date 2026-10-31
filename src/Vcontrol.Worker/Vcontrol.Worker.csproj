@@ -13,11 +13,18 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="MQTTnet" Version="5.2.0.1603" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.0" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.1" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.0" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.15.0-beta.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\LICENSE" Link="licenses\Apache-2.0.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\licenses\GPL-3.0.txt" Link="licenses\GPL-3.0.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\NOTICE.md" Link="NOTICE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

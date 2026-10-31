@@ -81,6 +81,8 @@ services.PostConfigure<VcontrolOptions>(opts =>
     var pollEnv = Environment.GetEnvironmentVariable("POLL_SECONDS");
     var publishValueOnlyEnv = Environment.GetEnvironmentVariable("PUBLISH_VALUE_ONLY");
     var directConnectionEnv = Environment.GetEnvironmentVariable("VCLIENT_DIRECT_CONNECTION");
+    var nativeConnectionEnv = Environment.GetEnvironmentVariable("VCLIENT_NATIVE_CONNECTION");
+    var optolinkDeviceEnv = Environment.GetEnvironmentVariable("OPTOLINK_DEVICE");
     if (!string.IsNullOrWhiteSpace(hostEnv)) opts.Host = hostEnv;
     if (int.TryParse(portEnv, out var p)) opts.Port = p;
     if (!string.IsNullOrWhiteSpace(commandsEnv))
@@ -116,21 +118,25 @@ services.PostConfigure<VcontrolOptions>(opts =>
     {
         opts.UseDirectConnection = useDirectConnection;
     }
+    if (!string.IsNullOrWhiteSpace(nativeConnectionEnv))
+    {
+        if (!bool.TryParse(nativeConnectionEnv, out var useNativeConnection))
+        {
+            throw new OptionsValidationException(nameof(VcontrolOptions), typeof(VcontrolOptions),
+                ["VCLIENT_NATIVE_CONNECTION must be 'true' or 'false'."]);
+        }
+        opts.UseNativeConnection = useNativeConnection;
+    }
+    if (!string.IsNullOrWhiteSpace(optolinkDeviceEnv))
+    {
+        opts.OptolinkDevice = optolinkDeviceEnv;
+    }
 });
-services.AddOptions<VcontrolOptions>()
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
 
 // Application services
 services.AddSingleton(_ => new VcontrolMetrics(enableMetrics));
 services.AddSingleton<MqttService>();
-services.AddSingleton<IVclientService>(serviceProvider =>
-{
-    var options = serviceProvider.GetRequiredService<IOptions<VcontrolOptions>>().Value;
-    return options.UseDirectConnection
-        ? ActivatorUtilities.CreateInstance<DirectVclientService>(serviceProvider)
-        : ActivatorUtilities.CreateInstance<VclientService>(serviceProvider);
-});
+services.AddVclientService();
 services.AddSingleton<LastReplyState>();
 services.AddHostedService<Worker>();
 services.AddHostedService<CommandsSubscriber>();

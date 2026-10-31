@@ -6,19 +6,26 @@ ARG FILE_VERSION
 ARG INFO_VERSION
 WORKDIR /src
 COPY .editorconfig ./.editorconfig
-COPY src/Vcontrol.Worker/ ./Vcontrol.Worker/
-RUN dotnet restore ./Vcontrol.Worker/Vcontrol.Worker.csproj
+COPY LICENSE NOTICE.md ./
+COPY licenses/ ./licenses/
+COPY src/Vcontrol.Worker/ ./src/Vcontrol.Worker/
+RUN dotnet restore ./src/Vcontrol.Worker/Vcontrol.Worker.csproj
 RUN if [ "$TARGETARCH" = "amd64" ]; then RID=linux-x64; \
     elif [ "$TARGETARCH" = "arm64" ]; then RID=linux-arm64; \
     else RID=linux-x64; fi; \
-        dotnet publish ./Vcontrol.Worker/Vcontrol.Worker.csproj -c Release -r $RID --self-contained true -p:PublishSingleFile=true \
-            -p:Version="${VERSION}" -p:AssemblyVersion="${ASSEMBLY_VERSION:-$VERSION}" -p:FileVersion="${FILE_VERSION:-$VERSION}" -p:InformationalVersion="${INFO_VERSION:-$VERSION}" \
+        dotnet publish ./src/Vcontrol.Worker/Vcontrol.Worker.csproj \
+            -c Release -r $RID --self-contained true -p:PublishSingleFile=true \
+            -p:Version="${VERSION}" \
+            -p:AssemblyVersion="${ASSEMBLY_VERSION:-$VERSION}" \
+            -p:FileVersion="${FILE_VERSION:-$VERSION}" \
+            -p:InformationalVersion="${INFO_VERSION:-$VERSION}" \
             -o /out
 
 FROM debian:stable-slim
 
 ENV OPTOLINK_DEVICE="/dev/ttyUSB0" \
-    VCONTROLD_PORT=3002
+    VCONTROLD_PORT=3002 \
+    VCLIENT_NATIVE_CONNECTION=false
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 ENV MQTT_HOST="" \
     MQTT_PORT=1883 \

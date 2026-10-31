@@ -1,6 +1,7 @@
 # vcontrol-dotnet
 
 Container image for integrating Viessmann boilers with MQTT using `vcontrold`. It runs `vcontrold` as a TCP service and a lightweight .NET worker that periodically reads configured boiler parameters and publishes them to your MQTT broker. In addition, it can subscribe to a dedicated command topic and execute incoming requests.
+An opt-in experimental native mode bypasses the daemon and accesses Optolink directly.
 
 ### Quick Run (Windows PowerShell)
 ```powershell
@@ -39,6 +40,7 @@ services:
       VCONTROLD_HOST: "127.0.0.1"
       VCONTROLD_PORT: "3002"
       VCLIENT_DIRECT_CONNECTION: "false"
+      VCLIENT_NATIVE_CONNECTION: "false"
       COMMANDS: "get_temp,get_pressure"
       MQTT_HOST: "mqtt.local"
       MQTT_PORT: "1883"
@@ -68,6 +70,7 @@ Key environment variables (all strings unless noted):
 - `VCONTROLD_HOST`: Host for the worker to reach `vcontrold` (default `127.0.0.1`).
 - `VCONTROLD_PORT`: TCP port for `vcontrold` (default `3002`).
 - `VCLIENT_DIRECT_CONNECTION` (bool, default `false`): Experimental mode that connects to `vcontrold` directly from the worker instead of launching the `vclient` process. Set to `true` to enable it.
+- `VCLIENT_NATIVE_CONNECTION` (bool, default `false`): Experimental C# Optolink implementation that communicates directly with `OPTOLINK_DEVICE`. Neither `vclient` nor `vcontrold` is started or contacted in this mode. Cannot be enabled together with `VCLIENT_DIRECT_CONNECTION`.
 - `COMMANDS` (required): Comma-separated `vclient` commands to run in a batch (e.g., `get_temp,get_pressure`).
 - `POLL_SECONDS` (int): Worker polling interval in seconds (default `60`).
 - `PUBLISH_VALUE_ONLY` (bool-like): When set (e.g., `true`), publishes only the `Value` field; otherwise publishes full JSON.
@@ -78,6 +81,53 @@ Behavioral notes:
 - Each command in `COMMANDS` is published to `MQTT_TOPIC/<command>`.
 - Subscribing service listens on `MQTT_TOPIC/commands` and executes payloads as CSV commands.
 - Logging uses `ILogger` with timestamps.
+
+### Experimental native Optolink mode
+
+Set `VCLIENT_NATIVE_CONNECTION=true` and leave `VCLIENT_DIRECT_CONNECTION=false`.
+The worker opens the serial device at **4800 baud, 8 data bits, even parity,
+2 stop bits**, serializes polling and MQTT command requests, and uses the same
+`command`, `value`, `raw`, and `error` reading shape as the existing modes.
+Do not run another process against the same device. Native mode has no TCP
+service on port 3002; health and optional metrics endpoints remain on port 8080.
+
+The device ID in `/etc/vcontrold/vcontrold.xml` selects the protocol and
+device-specific command overrides from its local `vito.xml` XInclude, as it does
+for the daemon. This is **configured selection, not hardware autodetection**:
+the shipped ID `20CB` selects P300. IDs `2098` and `2094` select KW2; ID `2053`
+selects GWG. Mount your configuration files to select the correct controller.
+`Vcontrol__OptolinkConfigPath` can select another local configuration path;
+`Vcontrol__OptolinkDevice` is also supported, with `OPTOLINK_DEVICE` taking
+precedence. Section-style flags `Vcontrol__UseNativeConnection` and
+`Vcontrol__UseDirectConnection` work when their flat flags are unset/empty.
+Invalid native flags and conflicting modes fail startup explicitly.
+The Docker image sets `VCLIENT_NATIVE_CONNECTION=false` by default; clear it
+explicitly when selecting native mode through a section-style environment flag.
+
+Native mode interprets the shipped protocol macros and register mappings,
+including signed/scaled numeric values, enums, bit status, schedules, BCD
+system time, error history, and GWG address spaces. Empty device overrides
+disable commands. Unknown/invalid commands are reported as errors, not zero
+readings. Reads retry only as specified by the XML. Writes are never
+automatically replayed after a timeout or lost acknowledgement: their outcome
+may be unknown, so verify the hardware state before retrying.
+
+Some shipped definitions cannot execute safely even in the upstream daemon:
+GWG `setaddr` references an undefined `SETADDR` macro, P300 `gettestaddr` is
+empty, and GWG bit/BH units have no usable write conversion. Native mode
+reports these limitations without inventing write opcodes or conversions.
+KW2/P300 mapped writes with valid definitions are supported. Numeric writes
+must fit the configured register width without fractional truncation. Schedule
+writes take one to four time pairs such as `06:00 22:00 -- --`, in ten-minute
+steps; system-time writes take ISO 8601 with an offset (or no argument to use
+the host clock). Read the controller's documentation before changing settings.
+
+This feature is experimental: deterministic serial transcript tests are not
+physical controller certification. Validate against your controller before
+relying on it for heating operation. The container still bundles upstream
+`vcontrold` to preserve the other two modes, but does not launch it in native mode.
+The [OpenV-derived P300 protocol notes](https://github.com/bertmelis/VitoWiFi/blob/main/docs/protocol_vs2.md)
+describe the framing and byte-count acknowledgement used by this implementation.
 
 ## Metrics & Observability
 
@@ -110,7 +160,7 @@ When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the full set of standard OTel SDK env
 | `vclient_requests_total` | Counter | `command`, `source` (`timer`/`command`), `result` (`success`/`error`) |
 | `vclient_request_duration_seconds` | Histogram | `command`, `source` |
 | `vclient_last_success_timestamp_seconds` | Gauge | `source` |
-| `vclient_errors_total` | Counter | `stage` (`process`/`deserialize`), `reason` (`non_zero_exit_code`/`exception`) |
+| `vclient_errors_total` | Counter | `stage` (`process`/`deserialize`/`hardware`), `reason` (`non_zero_exit_code`/`exception`/`timeout`/`invalid_command`/`internal_error`) |
 
 **MQTT**
 
@@ -194,11 +244,21 @@ curl http://localhost:8080/health/ready
 - To build locally:
   - Docker: `cd docker; docker build -t vcontrol-dotnet-local .`
   - Run: `docker run --rm -it --device "COM3" -e OPTOLINK_DEVICE="/dev/ttyUSB0" -e COMMANDS="get_temp" -p 3002:3002 vcontrol-dotnet-local`
+- Native-mode entrypoint checks (a POSIX shell, no device required):
+  `sh tests/entrypoint.tests.sh`.
 
 ## Licensing
-- Repository code: licensed under Apache License 2.0. See [LICENSE](LICENSE).
+- Original repository code: licensed under Apache License 2.0. See [LICENSE](LICENSE).
+- Native Optolink implementation: GPL-3.0-or-later, as marked in its source files.
+  Its protocol behavior was implemented with reference to upstream GPL source.
+  The combined worker executable is distributed under GPL-3.0-or-later,
+  including when the native feature flag is disabled. Existing Apache-2.0
+  permissions/notices for original files are retained. See [NOTICE.md](NOTICE.md).
 - vcontrold component: the container image bundles upstream `vcontrold`, which is licensed under GPL-3.0. See [NOTICE.md](NOTICE.md) and the full text at [licenses/GPL-3.0.txt](licenses/GPL-3.0.txt).
-- Combined distribution: When distributing container images that include `vcontrold`, you must comply with GPL-3.0 obligations for that component. This repository includes attribution and a written offer in [NOTICE.md](NOTICE.md). If you obtained binaries, you may request corresponding source as described there.
+- Combined distribution: Provide corresponding source for both the combined worker
+  and upstream `vcontrold`, including build scripts and configuration, as required
+  by GPL-3.0-or-later. License texts and notices accompany the worker output.
+  See [NOTICE.md](NOTICE.md) for attribution and source availability.
 - Upstream sources: `vcontrold` from https://github.com/openv/vcontrold and reference docs at https://github.com/openv/openv/wiki/vcontrold.xml.
 - Trademarks: Viessmann and related marks belong to their respective owners.
 
