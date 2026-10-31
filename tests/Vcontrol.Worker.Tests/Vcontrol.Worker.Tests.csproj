@@ -22,6 +22,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Vcontrol.Worker\Vcontrol.Worker.csproj" />
+    <None Include="..\..\docker\vcontrold.xml" Link="OptolinkFixtures\vcontrold.xml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docker\vito.xml" Link="OptolinkFixtures\vito.xml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

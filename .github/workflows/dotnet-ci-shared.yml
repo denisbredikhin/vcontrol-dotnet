@@ -70,6 +70,11 @@ jobs:
           SOLUTION_PATH: ${{ inputs.solution_path }}
         run: dotnet restore "$SOLUTION_PATH"
 
+      - name: Validate Docker entrypoint modes
+        run: |
+          sh -n docker/entrypoint.sh
+          sh tests/entrypoint.tests.sh
+
       - name: Run unit tests
         env:
           SOLUTION_PATH: ${{ inputs.solution_path }}
