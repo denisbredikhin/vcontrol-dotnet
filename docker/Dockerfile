@@ -13,8 +13,12 @@ RUN dotnet restore ./src/Vcontrol.Worker/Vcontrol.Worker.csproj
 RUN if [ "$TARGETARCH" = "amd64" ]; then RID=linux-x64; \
     elif [ "$TARGETARCH" = "arm64" ]; then RID=linux-arm64; \
     else RID=linux-x64; fi; \
-        dotnet publish ./src/Vcontrol.Worker/Vcontrol.Worker.csproj -c Release -r $RID --self-contained true -p:PublishSingleFile=true \
-            -p:Version="${VERSION}" -p:AssemblyVersion="${ASSEMBLY_VERSION:-$VERSION}" -p:FileVersion="${FILE_VERSION:-$VERSION}" -p:InformationalVersion="${INFO_VERSION:-$VERSION}" \
+        dotnet publish ./src/Vcontrol.Worker/Vcontrol.Worker.csproj \
+            -c Release -r $RID --self-contained true -p:PublishSingleFile=true \
+            -p:Version="${VERSION}" \
+            -p:AssemblyVersion="${ASSEMBLY_VERSION:-$VERSION}" \
+            -p:FileVersion="${FILE_VERSION:-$VERSION}" \
+            -p:InformationalVersion="${INFO_VERSION:-$VERSION}" \
             -o /out
 
 FROM debian:stable-slim

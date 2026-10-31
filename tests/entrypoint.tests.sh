@@ -13,7 +13,8 @@ printf '#!/bin/sh\necho WORKER_STARTED\n' > "$TEMP/worker"
 chmod +x "$TEMP/worker"
 
 assert_native() {
-    env VCLIENT_NATIVE_CONNECTION="$1" VCLIENT_DIRECT_CONNECTION=false \
+    native_mode="$1"
+    env VCLIENT_NATIVE_CONNECTION="$native_mode" VCLIENT_DIRECT_CONNECTION=false \
         sh "$TEMP/entrypoint.sh" > "$TEMP/output" 2>&1
     grep -q WORKER_STARTED "$TEMP/output"
     grep -q 'vcontrold will not be started' "$TEMP/output"

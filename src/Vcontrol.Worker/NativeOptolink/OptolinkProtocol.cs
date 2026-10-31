@@ -69,16 +69,7 @@ internal sealed class OptolinkProtocol(Stream stream, string protocolName)
 
     private async Task<byte[]> ExchangeP300Async(byte[] payload, int count, bool isWrite, CancellationToken ct)
     {
-        if (payload.Length is < 5 or > 250 || payload[0] != 0 || payload[1] != (isWrite ? 2 : 1)
-            || payload.Length != (isWrite ? 5 + payload[4] : 5))
-        {
-            throw new InvalidDataException("Invalid P300 request payload.");
-        }
-        var request = new byte[payload.Length + 3];
-        request[0] = 0x41;
-        request[1] = (byte)payload.Length;
-        payload.CopyTo(request, 2);
-        request[^1] = Checksum(request.AsSpan(1, request.Length - 2));
+        var request = CreateP300Request(payload, isWrite);
         await stream.WriteAsync(request, ct);
         await RequireByteAsync(6, ct);
 
@@ -90,7 +81,30 @@ internal sealed class OptolinkProtocol(Stream stream, string protocolName)
         }
         var response = new byte[header[1] + 1];
         await stream.ReadExactlyAsync(response, ct);
-        var checksum = unchecked((byte)(header[1] + Checksum(response.AsSpan(0, response.Length - 1))));
+        ValidateP300Response(payload, header[1], response);
+        var result = GetP300ResponseData(payload, header[1], response, count, isWrite);
+        await stream.WriteAsync(new byte[] { 6 }, ct);
+        return result;
+    }
+
+    private static byte[] CreateP300Request(byte[] payload, bool isWrite)
+    {
+        if (payload.Length is < 5 or > 250 || payload[0] != 0 || payload[1] != (isWrite ? 2 : 1)
+            || payload.Length != (isWrite ? 5 + payload[4] : 5))
+        {
+            throw new InvalidDataException("Invalid P300 request payload.");
+        }
+        var request = new byte[payload.Length + 3];
+        request[0] = 0x41;
+        request[1] = (byte)payload.Length;
+        payload.CopyTo(request, 2);
+        request[^1] = Checksum(request.AsSpan(1, request.Length - 2));
+        return request;
+    }
+
+    private static void ValidateP300Response(byte[] payload, byte length, byte[] response)
+    {
+        var checksum = unchecked((byte)(length + Checksum(response.AsSpan(0, response.Length - 1))));
         if (response[^1] != checksum)
         {
             throw new IOException("P300 response checksum mismatch.");
@@ -103,20 +117,22 @@ internal sealed class OptolinkProtocol(Stream stream, string protocolName)
         {
             throw new IOException("P300 response does not match the requested function/address.");
         }
+    }
+
+    private static byte[] GetP300ResponseData(byte[] payload, byte length, byte[] response, int count, bool isWrite)
+    {
         if (isWrite)
         {
-            if (header[1] != 5 || response[4] != payload[4] || count != 1)
+            if (length != 5 || response[4] != payload[4] || count != 1)
             {
                 throw new IOException("Invalid P300 write acknowledgement.");
             }
-            await stream.WriteAsync(new byte[] { 6 }, ct);
             return [0];
         }
-        if (response[4] != count || header[1] != 5 + count)
+        if (response[4] != count || length != 5 + count)
         {
             throw new IOException("P300 response data length mismatch.");
         }
-        await stream.WriteAsync(new byte[] { 6 }, ct);
         return response.AsSpan(5, count).ToArray();
     }
 
@@ -141,7 +157,14 @@ internal sealed class OptolinkProtocol(Stream stream, string protocolName)
         while (matched < expected.Length)
         {
             await stream.ReadExactlyAsync(bytes, ct);
-            matched = bytes[0] == expected[matched] ? matched + 1 : bytes[0] == expected[0] ? 1 : 0;
+            if (bytes[0] == expected[matched])
+            {
+                matched++;
+            }
+            else
+            {
+                matched = bytes[0] == expected[0] ? 1 : 0;
+            }
         }
     }
 

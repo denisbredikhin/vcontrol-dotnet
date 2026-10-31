@@ -35,7 +35,7 @@ public sealed class OptolinkConfigurationTests
         var configuration = OptolinkTestData.Configuration(id);
         var opcode = protocolCommand switch
         {
-            "getaddr" => id == "2053" ? "CB" : id == "20CB" ? "01" : "F7",
+            "getaddr" => id switch { "2053" => "CB", "20CB" => "01", _ => "F7" },
             "getpaddr" => "6E",
             "geteaddr" => "AE",
             "getxaddr" => "C5",

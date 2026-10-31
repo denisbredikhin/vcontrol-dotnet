@@ -92,24 +92,7 @@ internal sealed class OptolinkConfiguration
         var bit = int.Parse(mapping.Element("bit")?.Value ?? "0", CultureInfo.InvariantCulture);
         var argument = parts.Length == 2 ? parts[1] : string.Empty;
         var isWrite = protocolCommandName == "setaddr";
-        byte[] sendBytes = [];
-        if (isWrite)
-        {
-            sendBytes = new OptolinkValueCodec(Units).Encode(unit, argument, length, timeProvider);
-        }
-        else if (protocolCommandName.Contains("testaddr", StringComparison.Ordinal))
-        {
-            sendBytes = ParseHex(argument);
-            var expectedAddressBytes = ProtocolName == "GWG" ? 1 : 2;
-            if (sendBytes.Length != expectedAddressBytes)
-            {
-                throw new ArgumentException($"Supply {expectedAddressBytes} hexadecimal address byte(s) for '{parts[0]}'.", nameof(input));
-            }
-        }
-        else if (argument.Length > 0)
-        {
-            throw new ArgumentException($"Command '{parts[0]}' does not accept arguments.", nameof(input));
-        }
+        var sendBytes = PrepareSendBytes(parts[0], protocolCommandName, unit, argument, length, timeProvider);
 
         if (length < 0 || length > (ProtocolName == "P300" ? 245 : 250) || bit is < 0 or > 7)
         {
@@ -126,6 +109,31 @@ internal sealed class OptolinkConfiguration
 
         return new OptolinkCommand(input, instructions, bit, isWrite, TimeSpan.FromMilliseconds(timeout),
             isWrite ? 1 : attempts, mapping.Element("precommand")?.Value);
+    }
+
+    private byte[] PrepareSendBytes(string input, string protocolCommandName, string? unit, string argument,
+        int length, TimeProvider timeProvider)
+    {
+        var isWrite = protocolCommandName == "setaddr";
+        if (isWrite)
+        {
+            return new OptolinkValueCodec(Units).Encode(unit, argument, length, timeProvider);
+        }
+        if (protocolCommandName.Contains("testaddr", StringComparison.Ordinal))
+        {
+            var sendBytes = ParseHex(argument);
+            var expectedAddressBytes = ProtocolName == "GWG" ? 1 : 2;
+            if (sendBytes.Length != expectedAddressBytes)
+            {
+                throw new ArgumentException($"Supply {expectedAddressBytes} hexadecimal address byte(s) for '{input}'.", nameof(input));
+            }
+            return sendBytes;
+        }
+        if (argument.Length > 0)
+        {
+            throw new ArgumentException($"Command '{input}' does not accept arguments.", nameof(input));
+        }
+        return [];
     }
 
     private List<OptolinkInstruction> Compile(string script, string address, int length, string? unit,
@@ -152,29 +160,31 @@ internal sealed class OptolinkConfiguration
                 .Replace("$len", length.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
                 .Replace("$unit", unit ?? string.Empty, StringComparison.Ordinal)
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            switch (expanded[0])
-            {
-                case "SEND" when expanded.Length > 1 && expanded[1] == "BYTES":
-                    result.Add(new OptolinkInstruction("SEND", sendBytes, 0, null));
-                    break;
-                case "SEND":
-                case "WAIT":
-                    result.Add(new OptolinkInstruction(expanded[0], ParseHex(string.Join(' ', expanded.Skip(1))), 0, null));
-                    break;
-                case "RECV":
-                case "PAUSE":
-                    var count = int.Parse(expanded[1], CultureInfo.InvariantCulture);
-                    if (count is <= 0 or > 30000 || expanded[0] == "RECV" && count > 250)
-                    {
-                        throw new InvalidDataException($"Invalid protocol instruction '{line}'.");
-                    }
-                    result.Add(new OptolinkInstruction(expanded[0], [], count, expanded.Length > 2 ? expanded[2] : null));
-                    break;
-                default:
-                    throw new NotSupportedException($"Undefined protocol macro/instruction '{expanded[0]}' in {ProtocolName}.");
-            }
+            result.Add(CreateInstruction(expanded, sendBytes, line));
         }
         return result;
+    }
+
+    private OptolinkInstruction CreateInstruction(string[] expanded, byte[] sendBytes, string line)
+    {
+        switch (expanded[0])
+        {
+            case "SEND" when expanded.Length > 1 && expanded[1] == "BYTES":
+                return new OptolinkInstruction("SEND", sendBytes, 0, null);
+            case "SEND":
+            case "WAIT":
+                return new OptolinkInstruction(expanded[0], ParseHex(string.Join(' ', expanded.Skip(1))), 0, null);
+            case "RECV":
+            case "PAUSE":
+                var count = int.Parse(expanded[1], CultureInfo.InvariantCulture);
+                if (count is <= 0 or > 30000 || expanded[0] == "RECV" && count > 250)
+                {
+                    throw new InvalidDataException($"Invalid protocol instruction '{line}'.");
+                }
+                return new OptolinkInstruction(expanded[0], [], count, expanded.Length > 2 ? expanded[2] : null);
+            default:
+                throw new NotSupportedException($"Undefined protocol macro/instruction '{expanded[0]}' in {ProtocolName}.");
+        }
     }
 
     internal static byte[] ParseHex(string text)

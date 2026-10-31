@@ -77,69 +77,80 @@ internal sealed class OptolinkValueCodec(IReadOnlyDictionary<string, XElement> u
             case "systime":
                 return DecodeSystemTime(bytes);
             case "errstate":
-                if (bytes.Length % 9 != 0)
-                {
-                    throw new InvalidDataException("Error-state data must consist of 9-byte records.");
-                }
-                List<string> errors = [];
-                for (var index = 0; index < bytes.Length; index += 9)
-                {
-                    errors.Add($"{DecodeSystemTime(bytes[(index + 1)..(index + 9)])} {DecodeEnum(unit, [bytes[index]])} ({bytes[index]:X2})");
-                }
-                return string.Join('\n', errors);
+                return DecodeErrorState(unit, bytes);
         }
 
         var expression = Normalize(unit.Element("calc")?.Attribute("get")?.Value);
         var integerExpression = Normalize(unit.Element("icalc")?.Attribute("get")?.Value);
-        double value;
         if (integerExpression is not null)
         {
-            if (integerExpression == "(B0&(0x01<<BP))>>BP")
-            {
-                return DecodeEnum(unit, [(byte)((bytes[0] >> bit) & 1)]);
-            }
-            if (unit.Element("abbrev")?.Value == "SN"
-                && integerExpression == "((((((((((((B0-48)*10)+(B1-48))*10)+(B2-48))*10)+(B3-48))*10)+(B4-48))*10)+(B5-48))*10)+B6-48")
-            {
-                if (bytes.Length != 7 || bytes.Any(b => b is < 48 or > 57))
-                {
-                    throw new InvalidDataException("A Sachnummer must contain seven ASCII digits.");
-                }
-                return int.Parse(Encoding.ASCII.GetString(bytes), CultureInfo.InvariantCulture).ToString("X8", CultureInfo.InvariantCulture);
-            }
-            throw new NotSupportedException($"Unsupported integer conversion '{integerExpression}'.");
+            return DecodeIntegerExpression(unit, bytes, bit, integerExpression);
         }
+        var value = DecodeNumericExpression(type, bytes, expression);
+        return (value.ToString("F6", CultureInfo.InvariantCulture) + " " + (unit.Element("entity")?.Value ?? string.Empty)).TrimEnd();
+    }
+
+    private static string DecodeErrorState(XElement unit, byte[] bytes)
+    {
+        if (bytes.Length % 9 != 0)
+        {
+            throw new InvalidDataException("Error-state data must consist of 9-byte records.");
+        }
+        List<string> errors = [];
+        for (var index = 0; index < bytes.Length; index += 9)
+        {
+            errors.Add($"{DecodeSystemTime(bytes[(index + 1)..(index + 9)])} {DecodeEnum(unit, [bytes[index]])} ({bytes[index]:X2})");
+        }
+        return string.Join('\n', errors);
+    }
+
+    private static string DecodeIntegerExpression(XElement unit, byte[] bytes, int bit, string expression)
+    {
+        if (expression == "(B0&(0x01<<BP))>>BP")
+        {
+            return DecodeEnum(unit, [(byte)((bytes[0] >> bit) & 1)]);
+        }
+        if (unit.Element("abbrev")?.Value == "SN"
+            && expression == "((((((((((((B0-48)*10)+(B1-48))*10)+(B2-48))*10)+(B3-48))*10)+(B4-48))*10)+(B5-48))*10)+B6-48")
+        {
+            if (bytes.Length != 7 || bytes.Any(b => b is < 48 or > 57))
+            {
+                throw new InvalidDataException("A Sachnummer must contain seven ASCII digits.");
+            }
+            return int.Parse(Encoding.ASCII.GetString(bytes), CultureInfo.InvariantCulture).ToString("X8", CultureInfo.InvariantCulture);
+        }
+        throw new NotSupportedException($"Unsupported integer conversion '{expression}'.");
+    }
+
+    private static double DecodeNumericExpression(string? type, byte[] bytes, string? expression)
+    {
         if (expression == "B1")
         {
             if (bytes.Length < 2)
             {
                 throw new InvalidDataException("Conversion requires a second byte.");
             }
-            value = bytes[1];
+            return bytes[1];
         }
-        else if (expression == "(B1*100)+B0")
+        if (expression == "(B1*100)+B0")
         {
             if (bytes.Length < 2)
             {
                 throw new InvalidDataException("Brenner Stunden requires two bytes.");
             }
-            value = bytes[1] * 100 + bytes[0];
+            return bytes[1] * 100 + bytes[0];
         }
-        else
+        var value = DecodeInteger(type, bytes);
+        return expression switch
         {
-            value = DecodeInteger(type, bytes);
-            value = expression switch
-            {
-                "V" => value,
-                "V/2" => value / 2,
-                "V/10" => value / 10,
-                "V/100" => value / 100,
-                "V/1000" => value / 1000,
-                "V/3600" => value / 3600,
-                _ => throw new NotSupportedException($"Unsupported numeric conversion '{expression}'.")
-            };
-        }
-        return (value.ToString("F6", CultureInfo.InvariantCulture) + " " + (unit.Element("entity")?.Value ?? string.Empty)).TrimEnd();
+            "V" => value,
+            "V/2" => value / 2,
+            "V/10" => value / 10,
+            "V/100" => value / 100,
+            "V/1000" => value / 1000,
+            "V/3600" => value / 3600,
+            _ => throw new NotSupportedException($"Unsupported numeric conversion '{expression}'.")
+        };
     }
 
     private XElement GetUnit(string name) => units.TryGetValue(name, out var unit) ? unit
