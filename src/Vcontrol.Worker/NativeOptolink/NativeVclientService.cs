@@ -121,66 +121,64 @@ internal sealed class NativeVclientService(
         for (var attempt = 1; attempt <= command.Attempts; attempt++)
         {
             var attemptStopwatch = Stopwatch.StartNew();
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(command.Timeout);
-            var stage = $"opening serial device for {configuration.DeviceId}";
             logger.LogDebug(
                 "Starting native Optolink command {Command} on device {DeviceId} using {Protocol}, attempt {Attempt}/{Attempts}, timeout {TimeoutMs} ms.",
                 command.Input, configuration.DeviceId, configuration.ProtocolName, attempt, command.Attempts,
                 command.Timeout.TotalMilliseconds);
             try
             {
-                using var stream = openStream();
-                var protocol = new OptolinkProtocol(stream, configuration.ProtocolName, configuration.DeviceId,
-                    command.Input, logger, currentStage => stage = currentStage);
-                await protocol.InitializeAsync(timeout.Token);
-                if (command.Precommand is not null)
-                {
-                    var precommand = configuration.Prepare(command.Precommand, timeProvider);
-                    if (precommand.IsWrite)
-                    {
-                        throw new InvalidDataException("An Optolink precommand must not write hardware.");
-                    }
-                    _ = await protocol.ExecuteAsync(precommand, timeout.Token);
-                }
-                var result = await protocol.ExecuteAsync(command, timeout.Token);
+                var result = await ExecuteAttemptAsync(command, ct);
                 logger.LogDebug(
                     "Native Optolink command {Command} completed on attempt {Attempt}/{Attempts} in {ElapsedMs} ms.",
                     command.Input, attempt, command.Attempts, attemptStopwatch.Elapsed.TotalMilliseconds);
                 return result;
             }
-            catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+            catch (Exception ex) when (!ct.IsCancellationRequested && (ex is IOException or TimeoutException))
             {
-                var failure = new TimeoutException(
-                    $"Native Optolink command '{command.Input}' timed out after {command.Timeout.TotalMilliseconds:0} ms during {stage}.",
-                    ex);
-                LogAttemptFailure(failure, stage, attempt, command.Attempts, attemptStopwatch.Elapsed);
-                if (attempt == command.Attempts)
-                {
-                    throw failure;
-                }
-            }
-            catch (Exception ex) when (!ct.IsCancellationRequested && ex is IOException or TimeoutException)
-            {
-                Exception failure = ex is TimeoutException
-                    ? new TimeoutException($"Native Optolink operation timed out during {stage}: {ex.Message}", ex)
-                    : new IOException($"Optolink operation failed during {stage}: {ex.Message}", ex);
-                LogAttemptFailure(failure, stage, attempt, command.Attempts, attemptStopwatch.Elapsed);
-                if (attempt == command.Attempts)
-                {
-                    throw failure;
-                }
+                var level = attempt < command.Attempts ? LogLevel.Warning : LogLevel.Error;
+                logger.Log(level, ex,
+                    "Native Optolink command {Command} on device {DeviceId} using {Protocol} failed on attempt {Attempt}/{Attempts} after {ElapsedMs} ms: {Failure}",
+                    command.Input, configuration.DeviceId, configuration.ProtocolName, attempt, command.Attempts,
+                    attemptStopwatch.Elapsed.TotalMilliseconds, ex.Message);
+                if (attempt == command.Attempts) throw;
             }
         }
         throw new InvalidOperationException("An Optolink command requires at least one attempt.");
+    }
 
-        void LogAttemptFailure(Exception exception, string stage, int currentAttempt, int attempts, TimeSpan elapsed)
+    private async Task<(byte[] Bytes, string? Unit)> ExecuteAttemptAsync(OptolinkCommand command, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(command.Timeout);
+        var stage = $"opening serial device for {configuration.DeviceId}";
+        try
         {
-            var level = currentAttempt < attempts ? LogLevel.Warning : LogLevel.Error;
-            logger.Log(level, exception,
-                "Native Optolink command {Command} on device {DeviceId} using {Protocol} failed during {Stage} on attempt {Attempt}/{Attempts} after {ElapsedMs} ms.",
-                command.Input, configuration.DeviceId, configuration.ProtocolName, stage, currentAttempt, attempts,
-                elapsed.TotalMilliseconds);
+            using var stream = openStream();
+            var protocol = new OptolinkProtocol(stream, configuration.ProtocolName, configuration.DeviceId,
+                command.Input, logger, currentStage => stage = currentStage);
+            await protocol.InitializeAsync(timeout.Token);
+            if (command.Precommand is not null)
+            {
+                var precommand = configuration.Prepare(command.Precommand, timeProvider);
+                if (precommand.IsWrite)
+                {
+                    throw new InvalidDataException("An Optolink precommand must not write hardware.");
+                }
+                _ = await protocol.ExecuteAsync(precommand, timeout.Token);
+            }
+            return await protocol.ExecuteAsync(command, timeout.Token);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"Native Optolink command '{command.Input}' timed out after {command.Timeout.TotalMilliseconds:0} ms during {stage}.",
+                ex);
+        }
+        catch (Exception ex) when (ex is IOException or TimeoutException)
+        {
+            throw ex is TimeoutException
+                ? new TimeoutException($"Native Optolink operation timed out during {stage}: {ex.Message}", ex)
+                : new IOException($"Optolink operation failed during {stage}: {ex.Message}", ex);
         }
     }
 
