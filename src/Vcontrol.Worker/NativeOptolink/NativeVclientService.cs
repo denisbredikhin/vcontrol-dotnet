@@ -45,9 +45,20 @@ internal sealed class NativeVclientService(
         List<VclientReading> readings = [];
         List<string> errors = [];
         var exitCode = 0;
+        var deferReads = false;
         foreach (var input in inputs)
         {
             ct.ThrowIfCancellationRequested();
+            if (deferReads && !configuration.IsWriteCommand(input))
+            {
+                var deferredMessage = "Deferred after an earlier native Optolink communication failure; retrying on the next query batch.";
+                var deferredError = "ERR: " + deferredMessage;
+                logger.LogWarning("Deferring native Optolink read command {Command}: {Reason}", input, deferredMessage);
+                readings.Add(new VclientReading { Command = input, Value = 0, Raw = deferredError, Error = deferredError });
+                errors.Add($"{input}: {deferredMessage}");
+                continue;
+            }
+
             var (reading, code, message) = await QueryCommandAsync(input, codec, ct);
             readings.Add(reading);
             if (code != 0)
@@ -57,6 +68,10 @@ internal sealed class NativeVclientService(
                 if (exitCode == 0 || code < 0)
                 {
                     exitCode = code;
+                }
+                if (code < 0)
+                {
+                    deferReads = true;
                 }
             }
         }
@@ -70,10 +85,6 @@ internal sealed class NativeVclientService(
         {
             var command = configuration.Prepare(input, timeProvider);
             var (bytes, unit) = await ExecuteAsync(command, ct);
-            if (command.IsWrite && (bytes.Length != 1 || bytes[0] != 0))
-            {
-                throw new IOException($"Optolink write was not acknowledged successfully: {Convert.ToHexString(bytes)}.");
-            }
             var reading = bytes.Length == 0
                 ? new VclientReading { Command = input, Value = 0, Raw = "OK" }
                 : codec.Decode(input, unit, bytes, command.Bit);
@@ -128,6 +139,11 @@ internal sealed class NativeVclientService(
             try
             {
                 var result = await ExecuteAttemptAsync(command, ct);
+                if (command.IsWrite && (result.Bytes.Length != 1 || result.Bytes[0] != 0))
+                {
+                    throw new IOException(
+                        $"Optolink write was not acknowledged successfully: {Convert.ToHexString(result.Bytes)}.");
+                }
                 logger.LogDebug(
                     "Native Optolink command {Command} completed on attempt {Attempt}/{Attempts} in {ElapsedMs} ms.",
                     command.Input, attempt, command.Attempts, attemptStopwatch.Elapsed.TotalMilliseconds);

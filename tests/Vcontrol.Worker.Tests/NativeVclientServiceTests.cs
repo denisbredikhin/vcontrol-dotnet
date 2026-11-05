@@ -116,34 +116,93 @@ public sealed class NativeVclientServiceTests
     }
 
     [Fact]
-    public async Task Lost_write_acknowledgement_does_not_replay_the_write()
+    public async Task Lost_write_acknowledgement_retries_the_write_in_a_new_session()
     {
-        using var stream = new OptolinkTranscriptStream(("04", "05"), ("01F46300012D", ""));
+        using var failed = new OptolinkTranscriptStream(("04", "05"), ("01F46300012D", ""));
+        using var successful = new OptolinkTranscriptStream(("04", "05"), ("01F46300012D", "00"));
+        var streams = new Queue<Stream>([failed, successful]);
         var opens = 0;
         using var metrics = new VcontrolMetrics(false);
-        using var service = Create(metrics, () => { opens++; return stream; }, "2098");
+        using var service = Create(metrics, () => { opens++; return streams.Dequeue(); }, "2098");
 
         var result = await service.QueryAsync(["setTempWWsoll 45"], CommandSource, TestContext.Current.CancellationToken);
 
+        result.ExitCode.Should().Be(0);
+        result.Readings[0].Error.Should().BeNull();
+        opens.Should().Be(2);
+        streams.Should().BeEmpty();
+        failed.Writes.Should().Equal("04", "01F46300012D");
+        successful.Writes.Should().Equal("04", "01F46300012D");
+        failed.IsDisposed.Should().BeTrue();
+        successful.IsComplete.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task P300_write_retries_after_a_rejected_acknowledgement()
+    {
+        using var failed = new OptolinkTranscriptStream(("04", "05"), ("160000", "06"),
+            ("410600026300012D99", "15"));
+        using var successful = new OptolinkTranscriptStream(("04", "05"), ("160000", "06"),
+            ("410600026300012D99", "06410501026300016C"), ("06", ""));
+        var streams = new Queue<Stream>([failed, successful]);
+        using var metrics = new VcontrolMetrics(false);
+        using var service = Create(metrics, () => streams.Dequeue());
+
+        var result = await service.QueryAsync(["setTempWWsoll 45"], CommandSource, TestContext.Current.CancellationToken);
+
+        result.ExitCode.Should().Be(0);
+        result.Readings.Should().ContainSingle();
+        result.Readings[0].Error.Should().BeNull();
+        streams.Should().BeEmpty();
+        failed.IsDisposed.Should().BeTrue();
+        successful.IsComplete.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Failed_read_defers_later_reads_but_still_executes_writes()
+    {
+        using var failed = new OptolinkTranscriptStream(("04", "06"));
+        using var successfulWrite = new OptolinkTranscriptStream(("04", "05"), ("160000", "06"),
+            ("410600026300012D99", "06410501026300016C"), ("06", ""));
+        var streams = new Queue<Stream>([failed, successfulWrite]);
+        var opens = 0;
+        using var metrics = new VcontrolMetrics(false);
+        using var service = Create(metrics, () => { opens++; return streams.Dequeue(); });
+
+        var result = await service.QueryAsync(
+            [TemperatureCommand, "getTempKist", "setTempWWsoll 45"],
+            TimerSource,
+            TestContext.Current.CancellationToken);
+
         result.ExitCode.Should().Be(-1);
+        result.Readings.Should().HaveCount(3);
         result.Readings[0].Error.Should().Contain("disconnected");
-        opens.Should().Be(1);
-        stream.Writes.Should().Equal("04", "01F46300012D");
-        stream.IsDisposed.Should().BeTrue();
+        result.Readings[1].Error.Should().Contain("Deferred");
+        result.Readings[2].Error.Should().BeNull();
+        opens.Should().Be(2);
+        streams.Should().BeEmpty();
+        failed.IsDisposed.Should().BeTrue();
+        successfulWrite.IsComplete.Should().BeTrue();
     }
 
     [Fact]
     public async Task Rejected_write_acknowledgement_is_an_error_not_a_reading()
     {
-        using var stream = new OptolinkTranscriptStream(("04", "05"), ("01F46300012D", "05"));
+        using var first = new OptolinkTranscriptStream(("04", "05"), ("01F46300012D", "05"));
+        using var second = new OptolinkTranscriptStream(("04", "05"), ("01F46300012D", "05"));
+        var streams = new Queue<Stream>([first, second]);
+        var opens = 0;
         using var metrics = new VcontrolMetrics(false);
-        using var service = Create(metrics, () => stream, "2098");
+        using var service = Create(metrics, () => { opens++; return streams.Dequeue(); }, "2098");
 
         var result = await service.QueryAsync(["setTempWWsoll 45"], CommandSource, TestContext.Current.CancellationToken);
 
         result.ExitCode.Should().Be(-1);
         result.Readings[0].Error.Should().Contain("not acknowledged");
-        stream.IsComplete.Should().BeTrue();
+        opens.Should().Be(2);
+        streams.Should().BeEmpty();
+        first.IsDisposed.Should().BeTrue();
+        second.IsComplete.Should().BeTrue();
     }
 
     [Fact]

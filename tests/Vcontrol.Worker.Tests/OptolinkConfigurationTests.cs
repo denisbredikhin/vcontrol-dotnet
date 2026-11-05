@@ -85,7 +85,7 @@ public sealed class OptolinkConfigurationTests
         Convert.ToHexString(send[0].Bytes).Should().Be(expectedHeader);
         send[1].Bytes.Should().HaveCount(length);
         command.IsWrite.Should().BeTrue();
-        command.Attempts.Should().Be(1);
+        command.Attempts.Should().Be(2);
     }
 
     [Theory]
