@@ -120,12 +120,19 @@ internal sealed class NativeVclientService(
     {
         for (var attempt = 1; attempt <= command.Attempts; attempt++)
         {
+            var attemptStopwatch = Stopwatch.StartNew();
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(command.Timeout);
+            var stage = $"opening serial device for {configuration.DeviceId}";
+            logger.LogDebug(
+                "Starting native Optolink command {Command} on device {DeviceId} using {Protocol}, attempt {Attempt}/{Attempts}, timeout {TimeoutMs} ms.",
+                command.Input, configuration.DeviceId, configuration.ProtocolName, attempt, command.Attempts,
+                command.Timeout.TotalMilliseconds);
             try
             {
                 using var stream = openStream();
-                var protocol = new OptolinkProtocol(stream, configuration.ProtocolName);
+                var protocol = new OptolinkProtocol(stream, configuration.ProtocolName, configuration.DeviceId,
+                    command.Input, logger, currentStage => stage = currentStage);
                 await protocol.InitializeAsync(timeout.Token);
                 if (command.Precommand is not null)
                 {
@@ -136,15 +143,45 @@ internal sealed class NativeVclientService(
                     }
                     _ = await protocol.ExecuteAsync(precommand, timeout.Token);
                 }
-                return await protocol.ExecuteAsync(command, timeout.Token);
+                var result = await protocol.ExecuteAsync(command, timeout.Token);
+                logger.LogDebug(
+                    "Native Optolink command {Command} completed on attempt {Attempt}/{Attempts} in {ElapsedMs} ms.",
+                    command.Input, attempt, command.Attempts, attemptStopwatch.Elapsed.TotalMilliseconds);
+                return result;
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested && attempt < command.Attempts
-                && ex is IOException or TimeoutException or OperationCanceledException)
+            catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
             {
-                logger.LogWarning(ex, "Retrying native Optolink read {Command} after attempt {Attempt}.", command.Input, attempt);
+                var failure = new TimeoutException(
+                    $"Native Optolink command '{command.Input}' timed out after {command.Timeout.TotalMilliseconds:0} ms during {stage}.",
+                    ex);
+                LogAttemptFailure(failure, stage, attempt, command.Attempts, attemptStopwatch.Elapsed);
+                if (attempt == command.Attempts)
+                {
+                    throw failure;
+                }
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested && ex is IOException or TimeoutException)
+            {
+                Exception failure = ex is TimeoutException
+                    ? new TimeoutException($"Native Optolink operation timed out during {stage}: {ex.Message}", ex)
+                    : new IOException($"Optolink operation failed during {stage}: {ex.Message}", ex);
+                LogAttemptFailure(failure, stage, attempt, command.Attempts, attemptStopwatch.Elapsed);
+                if (attempt == command.Attempts)
+                {
+                    throw failure;
+                }
             }
         }
         throw new InvalidOperationException("An Optolink command requires at least one attempt.");
+
+        void LogAttemptFailure(Exception exception, string stage, int currentAttempt, int attempts, TimeSpan elapsed)
+        {
+            var level = currentAttempt < attempts ? LogLevel.Warning : LogLevel.Error;
+            logger.Log(level, exception,
+                "Native Optolink command {Command} on device {DeviceId} using {Protocol} failed during {Stage} on attempt {Attempt}/{Attempts} after {ElapsedMs} ms.",
+                command.Input, configuration.DeviceId, configuration.ProtocolName, stage, currentAttempt, attempts,
+                elapsed.TotalMilliseconds);
+        }
     }
 
     public void Dispose() => _semaphore.Dispose();

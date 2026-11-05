@@ -1,18 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 namespace Vcontrol.Worker;
 
-internal sealed class OptolinkProtocol(Stream stream, string protocolName)
+internal sealed class OptolinkProtocol(
+    Stream stream,
+    string protocolName,
+    string deviceId,
+    string command,
+    ILogger logger,
+    Action<string> stageChanged)
 {
+    public string CurrentStage { get; private set; } = "protocol startup";
+
     public async Task InitializeAsync(CancellationToken ct)
     {
         if (protocolName != "P300")
         {
             return;
         }
-        await stream.WriteAsync(new byte[] { 4 }, ct);
-        await WaitForAsync([5], ct);
-        await stream.WriteAsync(new byte[] { 0x16, 0, 0 }, ct);
-        await RequireByteAsync(6, ct);
+        SetStage("P300 session reset request");
+        await WriteAsync(new byte[] { 4 }, ct);
+        await WaitForAsync([5], "P300 session reset response (0x05)", ct);
+        SetStage("P300 session enable request");
+        await WriteAsync(new byte[] { 0x16, 0, 0 }, ct);
+        await RequireByteAsync(6, "P300 session enable acknowledgement", ct);
     }
 
     public async Task<(byte[] Bytes, string? Unit)> ExecuteAsync(OptolinkCommand command, CancellationToken ct)
@@ -20,8 +30,10 @@ internal sealed class OptolinkProtocol(Stream stream, string protocolName)
         List<byte> pending = [];
         byte[] result = [];
         string? unit = null;
-        foreach (var instruction in command.Instructions)
+        for (var index = 0; index < command.Instructions.Count; index++)
         {
+            var instruction = command.Instructions[index];
+            SetStage($"instruction {index + 1}/{command.Instructions.Count} {instruction.Operation}");
             switch (instruction.Operation)
             {
                 case "SEND":
@@ -29,7 +41,8 @@ internal sealed class OptolinkProtocol(Stream stream, string protocolName)
                     break;
                 case "WAIT":
                     await FlushAsync(pending, ct);
-                    await WaitForAsync(instruction.Bytes, ct);
+                    await WaitForAsync(instruction.Bytes,
+                        $"instruction {index + 1}/{command.Instructions.Count} WAIT for {Convert.ToHexString(instruction.Bytes)}", ct);
                     break;
                 case "PAUSE":
                     await FlushAsync(pending, ct);
@@ -52,9 +65,10 @@ internal sealed class OptolinkProtocol(Stream stream, string protocolName)
 
     private async Task<byte[]> ReceiveLegacyAsync(List<byte> pending, int count, CancellationToken ct)
     {
+        SetStage($"legacy response data ({count} byte(s))");
         await FlushAsync(pending, ct);
         var bytes = new byte[count];
-        await stream.ReadExactlyAsync(bytes, ct);
+        await ReadExactlyAsync(bytes, ct);
         return bytes;
     }
 
@@ -62,28 +76,33 @@ internal sealed class OptolinkProtocol(Stream stream, string protocolName)
     {
         if (pending.Count > 0)
         {
-            await stream.WriteAsync(pending.ToArray(), ct);
+            await WriteAsync(pending.ToArray(), ct);
             pending.Clear();
         }
     }
 
     private async Task<byte[]> ExchangeP300Async(byte[] payload, int count, bool isWrite, CancellationToken ct)
     {
+        SetStage("P300 request frame preparation");
         var request = CreateP300Request(payload, isWrite);
-        await stream.WriteAsync(request, ct);
-        await RequireByteAsync(6, ct);
+        SetStage("P300 request frame transmission");
+        await WriteAsync(request, ct);
+        await RequireByteAsync(6, "P300 request acknowledgement", ct);
 
+        SetStage("P300 response header");
         var header = new byte[2];
-        await stream.ReadExactlyAsync(header, ct);
+        await ReadExactlyAsync(header, ct);
         if (header[0] != 0x41 || header[1] is < 5 or > 250)
         {
             throw new IOException("Invalid P300 response header.");
         }
         var response = new byte[header[1] + 1];
-        await stream.ReadExactlyAsync(response, ct);
+        SetStage($"P300 response frame ({response.Length} byte(s))");
+        await ReadExactlyAsync(response, ct);
         ValidateP300Response(payload, header[1], response);
         var result = GetP300ResponseData(payload, header[1], response, count, isWrite);
-        await stream.WriteAsync(new byte[] { 6 }, ct);
+        SetStage("P300 response acknowledgement transmission");
+        await WriteAsync(new byte[] { 6 }, ct);
         return result;
     }
 
@@ -136,27 +155,31 @@ internal sealed class OptolinkProtocol(Stream stream, string protocolName)
         return response.AsSpan(5, count).ToArray();
     }
 
-    private async Task RequireByteAsync(byte expected, CancellationToken ct)
+    private async Task RequireByteAsync(byte expected, string stage, CancellationToken ct)
     {
+        SetStage(stage);
         var bytes = new byte[1];
-        await stream.ReadExactlyAsync(bytes, ct);
+        await ReadExactlyAsync(bytes, ct);
         if (bytes[0] != expected)
         {
-            throw new IOException($"Unexpected Optolink acknowledgement 0x{bytes[0]:X2}; expected 0x{expected:X2}.");
+            throw new IOException($"Unexpected Optolink acknowledgement 0x{bytes[0]:X2} during {stage}; expected 0x{expected:X2}.");
         }
     }
 
-    private async Task WaitForAsync(byte[] expected, CancellationToken ct)
+    private async Task WaitForAsync(byte[] expected, string stage, CancellationToken ct)
     {
         if (expected.Length == 0)
         {
             throw new InvalidDataException("Empty Optolink synchronization sequence.");
         }
+        SetStage(stage);
+        logger.LogDebug("Waiting for Optolink bytes {Expected} for command {Command} on device {DeviceId}.",
+            Convert.ToHexString(expected), command, deviceId);
         var matched = 0;
         var bytes = new byte[1];
         while (matched < expected.Length)
         {
-            await stream.ReadExactlyAsync(bytes, ct);
+            await ReadExactlyAsync(bytes, ct);
             if (bytes[0] == expected[matched])
             {
                 matched++;
@@ -165,6 +188,38 @@ internal sealed class OptolinkProtocol(Stream stream, string protocolName)
             {
                 matched = bytes[0] == expected[0] ? 1 : 0;
             }
+        }
+    }
+
+    private void SetStage(string stage)
+    {
+        CurrentStage = stage;
+        stageChanged(stage);
+        logger.LogDebug("Optolink {Protocol} command {Command} on device {DeviceId}: {Stage}.",
+            protocolName, command, deviceId, stage);
+    }
+
+    private async Task WriteAsync(ReadOnlyMemory<byte> bytes, CancellationToken ct)
+    {
+        await stream.WriteAsync(bytes, ct);
+        logger.LogTrace("Optolink TX {Protocol} command {Command} on device {DeviceId} during {Stage}: {Bytes}.",
+            protocolName, command, deviceId, CurrentStage, Convert.ToHexString(bytes.Span));
+    }
+
+    private async Task ReadExactlyAsync(Memory<byte> buffer, CancellationToken ct)
+    {
+        var offset = 0;
+        while (offset < buffer.Length)
+        {
+            var count = await stream.ReadAsync(buffer[offset..], ct);
+            if (count == 0)
+            {
+                throw new EndOfStreamException($"Optolink stream ended during {CurrentStage}.");
+            }
+            logger.LogTrace("Optolink RX {Protocol} command {Command} on device {DeviceId} during {Stage}: {Bytes}.",
+                protocolName, command, deviceId, CurrentStage,
+                Convert.ToHexString(buffer.Span.Slice(offset, count)));
+            offset += count;
         }
     }
 

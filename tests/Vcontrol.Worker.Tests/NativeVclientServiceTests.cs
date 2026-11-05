@@ -174,6 +174,7 @@ public sealed class NativeVclientServiceTests
 
         result.ExitCode.Should().Be(-3);
         result.Stderr.Should().Contain("timed out");
+        result.Stderr.Should().Contain("instruction 2/4 WAIT");
         result.Readings[0].Error.Should().Contain("timed out");
         stream.IsDisposed.Should().BeTrue();
     }

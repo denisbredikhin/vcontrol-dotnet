@@ -112,6 +112,16 @@ readings. Reads retry only as specified by the XML. Writes are never
 automatically replayed after a timeout or lost acknowledgement: their outcome
 may be unknown, so verify the hardware state before retrying.
 
+For intermittent native serial faults, `Debug` logs include the command,
+controller ID, protocol stage, attempt number, elapsed time, and configured
+timeout. Set
+`Logging__LogLevel__Vcontrol.Worker.NativeVclientService=Debug` to enable them.
+For raw transmitted and received bytes, temporarily use `Trace` instead of
+`Debug`; these traces can contain register values, so treat them as device data
+and disable verbose logging after diagnosis. A timeout then identifies the
+protocol stage that stopped responding, while a P300 `0x15` acknowledgement
+identifies whether the rejection occurred during session setup or a read request.
+
 Some shipped definitions cannot execute safely even in the upstream daemon:
 GWG `setaddr` references an undefined `SETADDR` macro, P300 `gettestaddr` is
 empty, and GWG bit/BH units have no usable write conversion. Native mode
