@@ -108,9 +108,12 @@ Native mode interprets the shipped protocol macros and register mappings,
 including signed/scaled numeric values, enums, bit status, schedules, BCD
 system time, error history, and GWG address spaces. Empty device overrides
 disable commands. Unknown/invalid commands are reported as errors, not zero
-readings. Reads retry only as specified by the XML. Writes are never
-automatically replayed after a timeout or lost acknowledgement: their outcome
-may be unknown, so verify the hardware state before retrying.
+readings. Reads retry only as specified by the XML. After a communication
+failure, subsequent reads in the same batch are deferred until the next batch;
+write commands in that batch are still attempted. Writes get up to two attempts
+by default, opening a fresh serial session for each attempt. A write may have
+been applied even if its acknowledgement was lost, so retries can apply the
+same register value more than once.
 
 For intermittent native serial faults, `Debug` logs include the command,
 controller ID, protocol stage, attempt number, elapsed time, and configured
