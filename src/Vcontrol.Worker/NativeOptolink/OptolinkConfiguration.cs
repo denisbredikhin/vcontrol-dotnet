@@ -7,6 +7,9 @@ namespace Vcontrol.Worker;
 
 internal sealed class OptolinkConfiguration
 {
+    private const string DeviceElementName = "device";
+    private const string ProtocolCommandAttributeName = "protocmd";
+
     private readonly Dictionary<string, XElement> _commands;
     private readonly Dictionary<string, string> _macros;
     private readonly Dictionary<string, XElement> _protocolCommands;
@@ -14,9 +17,9 @@ internal sealed class OptolinkConfiguration
     internal OptolinkConfiguration(XDocument control, XDocument vito)
     {
         var root = control.Root ?? throw new InvalidDataException("Missing V-Control configuration.");
-        var deviceId = root.Element("unix")?.Element("config")?.Element("device")?.Attribute("ID")?.Value
+        var deviceId = root.Element("unix")?.Element("config")?.Element(DeviceElementName)?.Attribute("ID")?.Value
             ?? throw new InvalidDataException("Missing configured Optolink device ID.");
-        var devices = vito.Root?.Element("devices")?.Elements("device") ?? [];
+        var devices = vito.Root?.Element("devices")?.Elements(DeviceElementName) ?? [];
         var device = devices.SingleOrDefault(d => d.Attribute("ID")?.Value == deviceId)
             ?? throw new InvalidDataException($"Optolink device ID '{deviceId}' is not defined in vito.xml.");
         DeviceId = deviceId;
@@ -52,9 +55,9 @@ internal sealed class OptolinkConfiguration
             return false;
         }
 
-        var deviceOverride = command.Elements("device").SingleOrDefault(d => d.Attribute("ID")?.Value == DeviceId);
-        var protocolCommandName = deviceOverride?.Attribute("protocmd")?.Value
-            ?? command.Attribute("protocmd")?.Value;
+        var deviceOverride = command.Elements(DeviceElementName).SingleOrDefault(d => d.Attribute("ID")?.Value == DeviceId);
+        var protocolCommandName = deviceOverride?.Attribute(ProtocolCommandAttributeName)?.Value
+            ?? command.Attribute(ProtocolCommandAttributeName)?.Value;
         return protocolCommandName == "setaddr";
     }
 
@@ -81,7 +84,7 @@ internal sealed class OptolinkConfiguration
             throw new ArgumentException($"Unknown Optolink command '{parts[0]}'.", nameof(input));
         }
 
-        var deviceOverride = command.Elements("device").SingleOrDefault(d => d.Attribute("ID")?.Value == DeviceId);
+        var deviceOverride = command.Elements(DeviceElementName).SingleOrDefault(d => d.Attribute("ID")?.Value == DeviceId);
         var mapping = deviceOverride ?? command;
         var address = mapping.Element("addr")?.Value;
         if (string.IsNullOrWhiteSpace(address))
@@ -89,7 +92,8 @@ internal sealed class OptolinkConfiguration
             throw new NotSupportedException($"Command '{parts[0]}' is disabled for device {DeviceId}.");
         }
 
-        var protocolCommandName = deviceOverride?.Attribute("protocmd")?.Value ?? RequiredAttribute(command, "protocmd");
+        var protocolCommandName = deviceOverride?.Attribute(ProtocolCommandAttributeName)?.Value
+            ?? RequiredAttribute(command, ProtocolCommandAttributeName);
         if (!_protocolCommands.TryGetValue(protocolCommandName, out var protocolCommand))
         {
             throw new NotSupportedException($"Protocol {ProtocolName} does not define '{protocolCommandName}'.");
