@@ -51,7 +51,8 @@ internal sealed class NativeVclientService(
         foreach (var input in inputs)
         {
             ct.ThrowIfCancellationRequested();
-            if (deferReads && !configuration.IsWriteCommand(input))
+            var isWrite = configuration.IsWriteCommand(input);
+            if (deferReads && !isWrite)
             {
                 var deferredMessage = "Deferred after an earlier native Optolink communication failure; retrying on the next query batch.";
                 var deferredError = "ERR: " + deferredMessage;
@@ -63,27 +64,17 @@ internal sealed class NativeVclientService(
 
             var (reading, code, message) = await QueryCommandAsync(input, codec, ct);
             readings.Add(reading);
-            if (code != 0)
+            if (code == 0)
             {
-                logger.LogError("Native Optolink command {Command} failed: {Error}", input, message);
-                errors.Add($"{input}: {message}");
-                if (code < 0 && !configuration.IsWriteCommand(input))
-                {
-                    transientReadFailure = true;
-                }
-                else
-                {
-                    healthCriticalFailure = true;
-                }
-                if (exitCode == 0 || code < 0)
-                {
-                    exitCode = code;
-                }
-                if (code < 0)
-                {
-                    deferReads = true;
-                }
+                continue;
             }
+
+            logger.LogError("Native Optolink command {Command} failed: {Error}", input, message);
+            errors.Add($"{input}: {message}");
+            transientReadFailure |= code < 0 && !isWrite;
+            healthCriticalFailure |= code >= 0 || isWrite;
+            exitCode = exitCode == 0 || code < 0 ? code : exitCode;
+            deferReads |= code < 0;
         }
         return new VclientQueryResult
         {

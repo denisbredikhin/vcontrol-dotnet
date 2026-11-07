@@ -5,6 +5,8 @@ namespace Vcontrol.Worker.Tests;
 
 public sealed class LastReplyStateTests
 {
+    private const string ReadFailureMessage = "read failed";
+
     [Fact]
     public void ReportSuccess_records_success_snapshot_and_clears_blank_error()
     {
@@ -66,8 +68,8 @@ public sealed class LastReplyStateTests
         var sut = new LastReplyState();
 
         // Act
-        sut.ReportTransientReadFailure(-1, "read failed");
-        sut.ReportTransientReadFailure(-1, "read failed");
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
 
         // Assert
         var snapshot = sut.GetSnapshot();
@@ -83,9 +85,9 @@ public sealed class LastReplyStateTests
         var sut = new LastReplyState();
 
         // Act
-        sut.ReportTransientReadFailure(-1, "read failed");
-        sut.ReportTransientReadFailure(-1, "read failed");
-        sut.ReportTransientReadFailure(-1, "read failed");
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
 
         // Assert
         var snapshot = sut.GetSnapshot();
@@ -98,8 +100,8 @@ public sealed class LastReplyStateTests
     {
         // Arrange
         var sut = new LastReplyState();
-        sut.ReportTransientReadFailure(-1, "read failed");
-        sut.ReportTransientReadFailure(-1, "read failed");
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
 
         // Act
         sut.ReportSuccess(0, null);

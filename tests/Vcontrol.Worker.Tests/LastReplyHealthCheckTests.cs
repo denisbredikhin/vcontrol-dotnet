@@ -5,6 +5,9 @@ namespace Vcontrol.Worker.Tests;
 
 public sealed class LastReplyHealthCheckTests
 {
+    private const string LastSuccessDataKey = "lastSuccess";
+    private const string ReadFailureMessage = "read failed";
+
     [Fact]
     public async Task CheckHealthAsync_returns_healthy_when_no_replies_were_reported()
     {
@@ -20,7 +23,7 @@ public sealed class LastReplyHealthCheckTests
         result.Status.Should().Be(HealthStatus.Healthy);
         result.Description.Should().Be("No replies have been recorded yet.");
         result.Data["hasReported"].Should().Be(false);
-        result.Data["lastSuccess"].Should().Be(false);
+        result.Data[LastSuccessDataKey].Should().Be(false);
         result.Data["lastExitCode"].Should().Be(-1);
         result.Data["lastError"].Should().Be(string.Empty);
     }
@@ -41,7 +44,7 @@ public sealed class LastReplyHealthCheckTests
         result.Status.Should().Be(HealthStatus.Healthy);
         result.Description.Should().Be("Last client reply was successful.");
         result.Data["hasReported"].Should().Be(true);
-        result.Data["lastSuccess"].Should().Be(true);
+        result.Data[LastSuccessDataKey].Should().Be(true);
         result.Data["lastExitCode"].Should().Be(0);
         result.Data["lastFailureAt"].Should().Be(string.Empty);
     }
@@ -62,7 +65,7 @@ public sealed class LastReplyHealthCheckTests
         result.Status.Should().Be(HealthStatus.Degraded);
         result.Description.Should().Be("Last client reply failed.");
         result.Data["hasReported"].Should().Be(true);
-        result.Data["lastSuccess"].Should().Be(false);
+        result.Data[LastSuccessDataKey].Should().Be(false);
         result.Data["lastExitCode"].Should().Be(2);
         result.Data["lastError"].Should().Be("failure");
     }
@@ -72,8 +75,8 @@ public sealed class LastReplyHealthCheckTests
     {
         // Arrange
         var state = new LastReplyState();
-        state.ReportTransientReadFailure(-1, "read failed");
-        state.ReportTransientReadFailure(-1, "read failed");
+        state.ReportTransientReadFailure(-1, ReadFailureMessage);
+        state.ReportTransientReadFailure(-1, ReadFailureMessage);
         var sut = new LastReplyHealthCheck(state);
         var context = new HealthCheckContext();
 
@@ -92,9 +95,9 @@ public sealed class LastReplyHealthCheckTests
     {
         // Arrange
         var state = new LastReplyState();
-        state.ReportTransientReadFailure(-1, "read failed");
-        state.ReportTransientReadFailure(-1, "read failed");
-        state.ReportTransientReadFailure(-1, "read failed");
+        state.ReportTransientReadFailure(-1, ReadFailureMessage);
+        state.ReportTransientReadFailure(-1, ReadFailureMessage);
+        state.ReportTransientReadFailure(-1, ReadFailureMessage);
         var sut = new LastReplyHealthCheck(state);
         var context = new HealthCheckContext();
 
