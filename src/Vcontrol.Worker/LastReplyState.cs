@@ -2,10 +2,14 @@ namespace Vcontrol.Worker;
 
 internal sealed class LastReplyState
 {
+    public const int MaxConsecutiveReadFailures = 3;
+
     private readonly Lock _lock = new();
 
     public bool HasReported { get; private set; }
     public bool LastSuccess { get; private set; }
+    public bool IsHealthy { get; private set; } = true;
+    public int ConsecutiveReadFailures { get; private set; }
     public DateTimeOffset? LastSuccessAt { get; private set; }
     public DateTimeOffset? LastFailureAt { get; private set; }
     public int? LastExitCode { get; private set; }
@@ -17,6 +21,8 @@ internal sealed class LastReplyState
         {
             HasReported = true;
             LastSuccess = true;
+            IsHealthy = true;
+            ConsecutiveReadFailures = 0;
             LastExitCode = exitCode;
             LastSuccessAt = DateTimeOffset.UtcNow;
             // Keep the last error around for diagnostics, even on success,
@@ -31,6 +37,22 @@ internal sealed class LastReplyState
         {
             HasReported = true;
             LastSuccess = false;
+            IsHealthy = false;
+            ConsecutiveReadFailures = 0;
+            LastExitCode = exitCode;
+            LastFailureAt = DateTimeOffset.UtcNow;
+            LastError = error;
+        }
+    }
+
+    public void ReportTransientReadFailure(int exitCode, string? error)
+    {
+        lock (_lock)
+        {
+            HasReported = true;
+            LastSuccess = false;
+            ConsecutiveReadFailures++;
+            IsHealthy = ConsecutiveReadFailures < MaxConsecutiveReadFailures;
             LastExitCode = exitCode;
             LastFailureAt = DateTimeOffset.UtcNow;
             LastError = error;
@@ -44,6 +66,8 @@ internal sealed class LastReplyState
             return new LastReplySnapshot(
                 HasReported,
                 LastSuccess,
+                IsHealthy,
+                ConsecutiveReadFailures,
                 LastSuccessAt,
                 LastFailureAt,
                 LastExitCode,
@@ -56,9 +80,10 @@ internal sealed class LastReplyState
 internal sealed record LastReplySnapshot(
     bool HasReported,
     bool LastSuccess,
+    bool IsHealthy,
+    int ConsecutiveReadFailures,
     DateTimeOffset? LastSuccessAt,
     DateTimeOffset? LastFailureAt,
     int? LastExitCode,
     string? LastError
 );
-

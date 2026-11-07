@@ -179,6 +179,7 @@ public sealed class NativeVclientServiceTests
             TestContext.Current.CancellationToken);
 
         result.ExitCode.Should().Be(-1);
+        result.IsTransientReadFailure.Should().BeTrue();
         result.Readings.Should().HaveCount(3);
         result.Readings[0].Error.Should().Contain("disconnected");
         result.Readings[1].Error.Should().Contain("Deferred");
@@ -202,6 +203,7 @@ public sealed class NativeVclientServiceTests
         var result = await service.QueryAsync([SetHotWaterTemperatureCommand], CommandSource, TestContext.Current.CancellationToken);
 
         result.ExitCode.Should().Be(-1);
+        result.IsTransientReadFailure.Should().BeFalse();
         result.Readings[0].Error.Should().Contain("not acknowledged");
         opens.Should().Be(2);
         streams.Should().BeEmpty();

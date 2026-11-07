@@ -46,6 +46,8 @@ internal sealed class NativeVclientService(
         List<string> errors = [];
         var exitCode = 0;
         var deferReads = false;
+        var transientReadFailure = false;
+        var healthCriticalFailure = false;
         foreach (var input in inputs)
         {
             ct.ThrowIfCancellationRequested();
@@ -65,6 +67,14 @@ internal sealed class NativeVclientService(
             {
                 logger.LogError("Native Optolink command {Command} failed: {Error}", input, message);
                 errors.Add($"{input}: {message}");
+                if (code < 0 && !configuration.IsWriteCommand(input))
+                {
+                    transientReadFailure = true;
+                }
+                else
+                {
+                    healthCriticalFailure = true;
+                }
                 if (exitCode == 0 || code < 0)
                 {
                     exitCode = code;
@@ -75,7 +85,13 @@ internal sealed class NativeVclientService(
                 }
             }
         }
-        return new VclientQueryResult { Readings = readings, ExitCode = exitCode, Stderr = string.Join(Environment.NewLine, errors) };
+        return new VclientQueryResult
+        {
+            Readings = readings,
+            ExitCode = exitCode,
+            Stderr = string.Join(Environment.NewLine, errors),
+            IsTransientReadFailure = transientReadFailure && !healthCriticalFailure
+        };
     }
 
     private async Task<(VclientReading Reading, int ExitCode, string? Message)> QueryCommandAsync(

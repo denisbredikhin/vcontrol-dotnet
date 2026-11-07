@@ -48,14 +48,40 @@ public sealed class WorkerTests
         snapshot.LastError.Should().BeNull();
     }
 
-    private static async Task<LastReplySnapshot> RunWorkerOnceAsync(VclientQueryResult result)
+    [Fact]
+    public async Task Transient_native_read_failure_keeps_health_healthy()
+    {
+        // Arrange
+        var result = new VclientQueryResult
+        {
+            ExitCode = -1,
+            Stderr = "read failed",
+            IsTransientReadFailure = true
+        };
+
+        // Act
+        var snapshot = await RunWorkerOnceAsync(result, useNativeConnection: true);
+
+        // Assert
+        snapshot.LastSuccess.Should().BeFalse();
+        snapshot.IsHealthy.Should().BeTrue();
+        snapshot.ConsecutiveReadFailures.Should().Be(1);
+    }
+
+    private static async Task<LastReplySnapshot> RunWorkerOnceAsync(
+        VclientQueryResult result, bool useNativeConnection = false)
     {
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         using var metrics = new VcontrolMetrics(enabled: false);
         var mqtt = new MqttService(NullLogger<MqttService>.Instance, Options.Create(new MqttOptions()), metrics);
         var state = new LastReplyState();
         var vclient = new FakeVclientService(result, stopping);
-        var options = Options.Create(new VcontrolOptions { Commands = ["getTemp", "getBetriebArt"], PollSeconds = 3600 });
+        var options = Options.Create(new VcontrolOptions
+        {
+            Commands = ["getTemp", "getBetriebArt"],
+            PollSeconds = 3600,
+            UseNativeConnection = useNativeConnection
+        });
         using var sut = new TestableWorker(mqtt, vclient, options, state);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sut.RunAsync(stopping.Token));

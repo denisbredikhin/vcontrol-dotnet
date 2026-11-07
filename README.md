@@ -217,14 +217,16 @@ The container exposes HTTP health check endpoints on port **8080** using ASP.NET
   - Use this to verify the container is alive and responsive
 
 - **GET `/health/ready`** – Readiness probe
-  - Returns `200 OK` if the last `vclient` reply was successful
-  - Returns `503 Service Unavailable` if the last reply failed or no replies have been recorded yet
+  - Returns `200 OK` when the service is ready; before any replies, readiness is healthy
+  - In native Optolink mode, the first two consecutive read communication failures keep readiness healthy; a third consecutive failed polling batch returns `503 Service Unavailable`
+  - A successful batch resets the consecutive read failure count. Write failures and other non-transient errors continue to affect readiness immediately
   - Response includes JSON with diagnostic information, for example:
 
     ```json
     {
       "status": "Healthy|Degraded|Unhealthy",
       "lastSuccess": true,
+      "consecutiveReadFailures": 0,
       "lastSuccessAt": "2026-02-10T12:34:56.789Z",
       "lastFailureAt": null,
       "lastExitCode": 0,

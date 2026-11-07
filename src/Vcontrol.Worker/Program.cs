@@ -203,6 +203,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
         {
             status = report.Status.ToString(),
             lastSuccess = snapshot.LastSuccess,
+            consecutiveReadFailures = snapshot.ConsecutiveReadFailures,
             lastSuccessAt = snapshot.LastSuccessAt,
             lastFailureAt = snapshot.LastFailureAt,
             lastExitCode = snapshot.LastExitCode,

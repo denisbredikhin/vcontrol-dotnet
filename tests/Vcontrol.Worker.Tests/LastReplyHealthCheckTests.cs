@@ -66,4 +66,43 @@ public sealed class LastReplyHealthCheckTests
         result.Data["lastExitCode"].Should().Be(2);
         result.Data["lastError"].Should().Be("failure");
     }
+
+    [Fact]
+    public async Task CheckHealthAsync_returns_healthy_for_the_first_two_transient_read_failures()
+    {
+        // Arrange
+        var state = new LastReplyState();
+        state.ReportTransientReadFailure(-1, "read failed");
+        state.ReportTransientReadFailure(-1, "read failed");
+        var sut = new LastReplyHealthCheck(state);
+        var context = new HealthCheckContext();
+
+        // Act
+        var result = await sut.CheckHealthAsync(context, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Status.Should().Be(HealthStatus.Healthy);
+        result.Description.Should().Contain("2 of 3");
+        result.Data["lastSuccess"].Should().Be(false);
+        result.Data["consecutiveReadFailures"].Should().Be(2);
+    }
+
+    [Fact]
+    public async Task CheckHealthAsync_returns_degraded_on_the_third_transient_read_failure()
+    {
+        // Arrange
+        var state = new LastReplyState();
+        state.ReportTransientReadFailure(-1, "read failed");
+        state.ReportTransientReadFailure(-1, "read failed");
+        state.ReportTransientReadFailure(-1, "read failed");
+        var sut = new LastReplyHealthCheck(state);
+        var context = new HealthCheckContext();
+
+        // Act
+        var result = await sut.CheckHealthAsync(context, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Status.Should().Be(HealthStatus.Degraded);
+        result.Data["consecutiveReadFailures"].Should().Be(3);
+    }
 }
