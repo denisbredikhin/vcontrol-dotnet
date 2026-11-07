@@ -5,6 +5,8 @@ namespace Vcontrol.Worker.Tests;
 
 public sealed class LastReplyStateTests
 {
+    private const string ReadFailureMessage = "read failed";
+
     [Fact]
     public void ReportSuccess_records_success_snapshot_and_clears_blank_error()
     {
@@ -57,5 +59,57 @@ public sealed class LastReplyStateTests
         snapshot.LastExitCode.Should().Be(7);
         snapshot.LastFailureAt.Should().NotBeNull();
         snapshot.LastError.Should().Be("boom");
+    }
+
+    [Fact]
+    public void ReportTransientReadFailure_keeps_health_until_the_third_consecutive_failure()
+    {
+        // Arrange
+        var sut = new LastReplyState();
+
+        // Act
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
+
+        // Assert
+        var snapshot = sut.GetSnapshot();
+        snapshot.LastSuccess.Should().BeFalse();
+        snapshot.IsHealthy.Should().BeTrue();
+        snapshot.ConsecutiveReadFailures.Should().Be(2);
+    }
+
+    [Fact]
+    public void ReportTransientReadFailure_marks_health_unhealthy_on_the_third_consecutive_failure()
+    {
+        // Arrange
+        var sut = new LastReplyState();
+
+        // Act
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
+
+        // Assert
+        var snapshot = sut.GetSnapshot();
+        snapshot.IsHealthy.Should().BeFalse();
+        snapshot.ConsecutiveReadFailures.Should().Be(3);
+    }
+
+    [Fact]
+    public void ReportSuccess_resets_consecutive_transient_read_failures()
+    {
+        // Arrange
+        var sut = new LastReplyState();
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
+        sut.ReportTransientReadFailure(-1, ReadFailureMessage);
+
+        // Act
+        sut.ReportSuccess(0, null);
+
+        // Assert
+        var snapshot = sut.GetSnapshot();
+        snapshot.IsHealthy.Should().BeTrue();
+        snapshot.LastSuccess.Should().BeTrue();
+        snapshot.ConsecutiveReadFailures.Should().Be(0);
     }
 }

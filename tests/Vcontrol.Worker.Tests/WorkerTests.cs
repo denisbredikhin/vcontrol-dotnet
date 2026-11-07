@@ -48,6 +48,26 @@ public sealed class WorkerTests
         snapshot.LastError.Should().BeNull();
     }
 
+    [Fact]
+    public async Task Transient_native_read_failure_keeps_health_healthy()
+    {
+        // Arrange
+        var result = new VclientQueryResult
+        {
+            ExitCode = -1,
+            Stderr = "read failed",
+            IsTransientReadFailure = true
+        };
+
+        // Act
+        var snapshot = await RunWorkerOnceAsync(result);
+
+        // Assert
+        snapshot.LastSuccess.Should().BeFalse();
+        snapshot.IsHealthy.Should().BeTrue();
+        snapshot.ConsecutiveReadFailures.Should().Be(1);
+    }
+
     private static async Task<LastReplySnapshot> RunWorkerOnceAsync(VclientQueryResult result)
     {
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);

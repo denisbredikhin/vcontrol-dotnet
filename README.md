@@ -108,9 +108,12 @@ Native mode interprets the shipped protocol macros and register mappings,
 including signed/scaled numeric values, enums, bit status, schedules, BCD
 system time, error history, and GWG address spaces. Empty device overrides
 disable commands. Unknown/invalid commands are reported as errors, not zero
-readings. Reads retry only as specified by the XML. Writes are never
-automatically replayed after a timeout or lost acknowledgement: their outcome
-may be unknown, so verify the hardware state before retrying.
+readings. Reads retry only as specified by the XML. After a communication
+failure, subsequent reads in the same batch are deferred until the next batch;
+write commands in that batch are still attempted. Writes get up to two attempts
+by default, opening a fresh serial session for each attempt. A write may have
+been applied even if its acknowledgement was lost, so retries can apply the
+same register value more than once.
 
 For intermittent native serial faults, `Debug` logs include the command,
 controller ID, protocol stage, attempt number, elapsed time, and configured
@@ -214,14 +217,16 @@ The container exposes HTTP health check endpoints on port **8080** using ASP.NET
   - Use this to verify the container is alive and responsive
 
 - **GET `/health/ready`** – Readiness probe
-  - Returns `200 OK` if the last `vclient` reply was successful
-  - Returns `503 Service Unavailable` if the last reply failed or no replies have been recorded yet
+  - Returns `200 OK` when the service is ready; before any replies, readiness is healthy
+  - In native Optolink mode, the first two consecutive read communication failures keep readiness healthy; a third consecutive failed polling batch returns `503 Service Unavailable`
+  - A successful batch resets the consecutive read failure count. Write failures and other non-transient errors continue to affect readiness immediately
   - Response includes JSON with diagnostic information, for example:
 
     ```json
     {
       "status": "Healthy|Degraded|Unhealthy",
       "lastSuccess": true,
+      "consecutiveReadFailures": 0,
       "lastSuccessAt": "2026-02-10T12:34:56.789Z",
       "lastFailureAt": null,
       "lastExitCode": 0,

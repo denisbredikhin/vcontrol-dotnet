@@ -9,11 +9,15 @@ public sealed class NativeVclientServiceTests
     private const string TimerSource = "timer";
     private const string CommandSource = "command";
     private const string Kw2TemperatureRequest = "01F7080002";
+    private const string P300ResetRequest = "160000";
+    private const string P300SetAddressRequest = "410600026300012D99";
+    private const string SetHotWaterTemperatureCommand = "setTempWWsoll 45";
+    private const string Kw2SetAddressRequest = "01F46300012D";
 
     [Fact]
     public async Task Native_query_returns_readings_without_a_daemon()
     {
-        using var stream = new OptolinkTranscriptStream(("04", "05"), ("160000", "06"),
+        using var stream = new OptolinkTranscriptStream(("04", "05"), (P300ResetRequest, "06"),
             ("4105000108000210", "0641070101080002D700EA"), ("06", ""));
         using var metrics = new VcontrolMetrics(false);
         using var service = Create(metrics, () => stream);
@@ -34,12 +38,12 @@ public sealed class NativeVclientServiceTests
     [Fact]
     public async Task Native_write_returns_success_only_after_device_confirmation()
     {
-        using var stream = new OptolinkTranscriptStream(("04", "05"), ("160000", "06"),
-            ("410600026300012D99", "06410501026300016C"), ("06", ""));
+        using var stream = new OptolinkTranscriptStream(("04", "05"), (P300ResetRequest, "06"),
+            (P300SetAddressRequest, "06410501026300016C"), ("06", ""));
         using var metrics = new VcontrolMetrics(false);
         using var service = Create(metrics, () => stream);
 
-        var result = await service.QueryAsync(["setTempWWsoll 45"], CommandSource, TestContext.Current.CancellationToken);
+        var result = await service.QueryAsync([SetHotWaterTemperatureCommand], CommandSource, TestContext.Current.CancellationToken);
 
         result.ExitCode.Should().Be(0);
         result.Stderr.Should().BeEmpty();
@@ -52,7 +56,7 @@ public sealed class NativeVclientServiceTests
     [Theory]
     [InlineData("missing", "20CB", "*Unknown*")]
     [InlineData("setTempWWsoll 256", "20CB", "*register range*")]
-    [InlineData("setTempWWsoll 45", "2053", "*SETADDR*")]
+    [InlineData(SetHotWaterTemperatureCommand, "2053", "*SETADDR*")]
     [InlineData("get 0800", "20CB", "*empty definition*")]
     public async Task Invalid_or_unsupported_commands_do_not_open_hardware(string input, string id, string error)
     {
@@ -116,34 +120,95 @@ public sealed class NativeVclientServiceTests
     }
 
     [Fact]
-    public async Task Lost_write_acknowledgement_does_not_replay_the_write()
+    public async Task Lost_write_acknowledgement_retries_the_write_in_a_new_session()
     {
-        using var stream = new OptolinkTranscriptStream(("04", "05"), ("01F46300012D", ""));
+        using var failed = new OptolinkTranscriptStream(("04", "05"), (Kw2SetAddressRequest, ""));
+        using var successful = new OptolinkTranscriptStream(("04", "05"), (Kw2SetAddressRequest, "00"));
+        var streams = new Queue<Stream>([failed, successful]);
         var opens = 0;
         using var metrics = new VcontrolMetrics(false);
-        using var service = Create(metrics, () => { opens++; return stream; }, "2098");
+        using var service = Create(metrics, () => { opens++; return streams.Dequeue(); }, "2098");
 
-        var result = await service.QueryAsync(["setTempWWsoll 45"], CommandSource, TestContext.Current.CancellationToken);
+        var result = await service.QueryAsync([SetHotWaterTemperatureCommand], CommandSource, TestContext.Current.CancellationToken);
+
+        result.ExitCode.Should().Be(0);
+        result.Readings[0].Error.Should().BeNull();
+        opens.Should().Be(2);
+        streams.Should().BeEmpty();
+        failed.Writes.Should().Equal("04", Kw2SetAddressRequest);
+        successful.Writes.Should().Equal("04", Kw2SetAddressRequest);
+        failed.IsDisposed.Should().BeTrue();
+        successful.IsComplete.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task P300_write_retries_after_a_rejected_acknowledgement()
+    {
+        using var failed = new OptolinkTranscriptStream(("04", "05"), (P300ResetRequest, "06"),
+            (P300SetAddressRequest, "15"));
+        using var successful = new OptolinkTranscriptStream(("04", "05"), (P300ResetRequest, "06"),
+            (P300SetAddressRequest, "06410501026300016C"), ("06", ""));
+        var streams = new Queue<Stream>([failed, successful]);
+        using var metrics = new VcontrolMetrics(false);
+        using var service = Create(metrics, () => streams.Dequeue());
+
+        var result = await service.QueryAsync([SetHotWaterTemperatureCommand], CommandSource, TestContext.Current.CancellationToken);
+
+        result.ExitCode.Should().Be(0);
+        result.Readings.Should().ContainSingle();
+        result.Readings[0].Error.Should().BeNull();
+        streams.Should().BeEmpty();
+        failed.IsDisposed.Should().BeTrue();
+        successful.IsComplete.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Failed_read_defers_later_reads_but_still_executes_writes()
+    {
+        using var failed = new OptolinkTranscriptStream(("04", "06"));
+        using var successfulWrite = new OptolinkTranscriptStream(("04", "05"), (P300ResetRequest, "06"),
+            (P300SetAddressRequest, "06410501026300016C"), ("06", ""));
+        var streams = new Queue<Stream>([failed, successfulWrite]);
+        var opens = 0;
+        using var metrics = new VcontrolMetrics(false);
+        using var service = Create(metrics, () => { opens++; return streams.Dequeue(); });
+
+        var result = await service.QueryAsync(
+            [TemperatureCommand, "getTempKist", SetHotWaterTemperatureCommand],
+            TimerSource,
+            TestContext.Current.CancellationToken);
 
         result.ExitCode.Should().Be(-1);
+        result.IsTransientReadFailure.Should().BeTrue();
+        result.Readings.Should().HaveCount(3);
         result.Readings[0].Error.Should().Contain("disconnected");
-        opens.Should().Be(1);
-        stream.Writes.Should().Equal("04", "01F46300012D");
-        stream.IsDisposed.Should().BeTrue();
+        result.Readings[1].Error.Should().Contain("Deferred");
+        result.Readings[2].Error.Should().BeNull();
+        opens.Should().Be(2);
+        streams.Should().BeEmpty();
+        failed.IsDisposed.Should().BeTrue();
+        successfulWrite.IsComplete.Should().BeTrue();
     }
 
     [Fact]
     public async Task Rejected_write_acknowledgement_is_an_error_not_a_reading()
     {
-        using var stream = new OptolinkTranscriptStream(("04", "05"), ("01F46300012D", "05"));
+        using var first = new OptolinkTranscriptStream(("04", "05"), (Kw2SetAddressRequest, "05"));
+        using var second = new OptolinkTranscriptStream(("04", "05"), (Kw2SetAddressRequest, "05"));
+        var streams = new Queue<Stream>([first, second]);
+        var opens = 0;
         using var metrics = new VcontrolMetrics(false);
-        using var service = Create(metrics, () => stream, "2098");
+        using var service = Create(metrics, () => { opens++; return streams.Dequeue(); }, "2098");
 
-        var result = await service.QueryAsync(["setTempWWsoll 45"], CommandSource, TestContext.Current.CancellationToken);
+        var result = await service.QueryAsync([SetHotWaterTemperatureCommand], CommandSource, TestContext.Current.CancellationToken);
 
         result.ExitCode.Should().Be(-1);
+        result.IsTransientReadFailure.Should().BeFalse();
         result.Readings[0].Error.Should().Contain("not acknowledged");
-        stream.IsComplete.Should().BeTrue();
+        opens.Should().Be(2);
+        streams.Should().BeEmpty();
+        first.IsDisposed.Should().BeTrue();
+        second.IsComplete.Should().BeTrue();
     }
 
     [Fact]

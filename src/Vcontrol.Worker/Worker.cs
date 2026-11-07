@@ -91,7 +91,17 @@ internal class Worker(ILogger<Worker> logger, MqttService mqtt, IVclientService 
         if (result.ExitCode != 0)
         {
             logger.LogWarning("vclient exited with code {Code}.", result.ExitCode);
-            lastReplyState.ReportFailure(result.ExitCode, string.IsNullOrWhiteSpace(result.Stderr) ? "vclient exited with non-zero exit code." : result.Stderr);
+            var error = string.IsNullOrWhiteSpace(result.Stderr)
+                ? "vclient exited with non-zero exit code."
+                : result.Stderr;
+            if (result.IsTransientReadFailure)
+            {
+                lastReplyState.ReportTransientReadFailure(result.ExitCode, error);
+            }
+            else
+            {
+                lastReplyState.ReportFailure(result.ExitCode, error);
+            }
         }
         else if (readingError != null)
         {
