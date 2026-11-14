@@ -41,8 +41,64 @@ internal class MqttService
             .WithCredentials(_optionsSnapshot.Value.User ?? string.Empty, _optionsSnapshot.Value.Password ?? string.Empty)
             .Build();
 
-        _client.ConnectedAsync += _ => { _metrics.SetMqttConnected(true); return Task.CompletedTask; };
-        _client.DisconnectedAsync += _ => { _metrics.SetMqttConnected(false); return Task.CompletedTask; };
+        _client.ConnectedAsync += OnConnectedAsync;
+        _client.DisconnectedAsync += OnDisconnectedAsync;
+    }
+
+    private async Task OnConnectedAsync(MqttClientConnectedEventArgs args)
+    {
+        _metrics.SetMqttConnected(true);
+
+        SubscriptionEntry[] subscriptions;
+        lock (_subsLock)
+        {
+            subscriptions = [.. _subscriptions];
+        }
+
+        if (subscriptions.Length == 0)
+        {
+            return;
+        }
+
+        _logger.LogInformation("Restoring {Count} MQTT subscriptions after reconnect.", subscriptions.Length);
+        foreach (var subscription in subscriptions)
+        {
+            try
+            {
+                var result = await SubscribeTopicAsync(subscription.Topic, CancellationToken.None);
+                var accepted = LogSubscriptionResult(subscription.Topic, result);
+                if (subscription.Subtopic == "commands")
+                {
+                    _metrics.SetCommandsSubscriptionActive(accepted);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (subscription.Subtopic == "commands")
+                {
+                    _metrics.SetCommandsSubscriptionActive(false);
+                }
+
+                _logger.LogError(ex, "Failed to restore MQTT subscription to {Topic}.", subscription.Topic);
+            }
+        }
+    }
+
+    private Task OnDisconnectedAsync(MqttClientDisconnectedEventArgs args)
+    {
+        _metrics.SetMqttConnected(false);
+        _metrics.SetCommandsSubscriptionActive(false);
+
+        if (args.Exception is not null)
+        {
+            _logger.LogWarning(args.Exception, "MQTT disconnected (reason: {Reason}).", args.Reason);
+        }
+        else
+        {
+            _logger.LogWarning("MQTT disconnected (reason: {Reason}).", args.Reason);
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task<bool> EnsureConnectedAsync(CancellationToken ct)
@@ -169,11 +225,13 @@ internal class MqttService
 
         try
         {
-            var filter = new MqttTopicFilterBuilder()
-                .WithTopic(topic)
-                .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
-                .Build();
-            await _client.SubscribeAsync(filter, ct);
+            var result = await SubscribeTopicAsync(topic, ct);
+            if (!LogSubscriptionResult(topic, result))
+            {
+                _client.ApplicationMessageReceivedAsync -= Wrapped;
+                return false;
+            }
+
             lock (_subsLock)
             {
                 _subscriptions.Add(new SubscriptionEntry
@@ -184,7 +242,6 @@ internal class MqttService
                     WrappedHandler = Wrapped
                 });
             }
-            _logger.LogInformation("Subscribed to MQTT topic {Topic}.", topic);
             return true;
         }
         catch (Exception ex)
@@ -193,6 +250,28 @@ internal class MqttService
             _logger.LogWarning(ex, "Failed to subscribe to MQTT topic {Topic}.", topic);
             return false;
         }
+    }
+
+    private async Task<MqttClientSubscribeResult> SubscribeTopicAsync(string topic, CancellationToken ct)
+    {
+        var filter = new MqttTopicFilterBuilder()
+            .WithTopic(topic)
+            .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+            .Build();
+        return await _client!.SubscribeAsync(filter, ct);
+    }
+
+    private bool LogSubscriptionResult(string topic, MqttClientSubscribeResult result)
+    {
+        var reasonCodes = string.Join(", ", result.Items.Select(item => item.ResultCode));
+        if (result.Items.Any(item => (int)item.ResultCode >= 0x80))
+        {
+            _logger.LogError("Broker rejected MQTT subscription to {Topic}; SUBACK reason codes: {ReasonCodes}.", topic, reasonCodes);
+            return false;
+        }
+
+        _logger.LogInformation("Subscribed to MQTT topic {Topic}; SUBACK reason codes: {ReasonCodes}.", topic, reasonCodes);
+        return true;
     }
 
     public async Task UnsubscribeAsync(string subtopic, Func<string, string, Task> handler, CancellationToken ct)
