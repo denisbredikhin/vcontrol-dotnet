@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS worker-builder
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS worker-builder
 ARG TARGETARCH
 ARG VERSION
 ARG ASSEMBLY_VERSION
